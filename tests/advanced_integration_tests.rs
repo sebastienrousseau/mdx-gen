@@ -1,5 +1,5 @@
-use mdx_gen::{process_markdown, MarkdownOptions};
 use comrak::ComrakOptions;
+use mdx_gen::{process_markdown, MarkdownOptions};
 
 #[test]
 fn test_complex_markdown_with_all_features() {
@@ -62,8 +62,11 @@ Here's a paragraph with **bold** and *italic* text, followed by a list:
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
-
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 
@@ -77,10 +80,17 @@ Here's a paragraph with **bold** and *italic* text, followed by a list:
     assert!(html.contains(r#"<div class="alert alert-success" role="alert"><strong>Tip:</strong>"#));
     assert!(html.contains(r#"<pre><code class="language-rust">"#));
     assert!(html.contains("Hello, world!"));
-    assert!(html.contains(r#"<div class="table-responsive"><table class="table">"#));
-    assert!(html.contains(r#"<td align="left" class="text-left">A</td>"#));
-    assert!(html.contains(r#"<td align="center" class="text-center">B</td>"#));
-    assert!(html.contains(r#"<td align="right" class="text-right">C</td>"#));
+    assert!(html.contains(
+        r#"<div class="table-responsive"><table class="table">"#
+    ));
+    assert!(
+        html.contains(r#"<td align="left" class="text-left">A</td>"#)
+    );
+    assert!(html
+        .contains(r#"<td align="center" class="text-center">B</td>"#));
+    assert!(
+        html.contains(r#"<td align="right" class="text-right">C</td>"#)
+    );
     assert!(html.contains("<strong>bold</strong>"));
     assert!(html.contains("<em>italic</em>"));
     assert!(html.contains("<ol>"));
@@ -118,7 +128,11 @@ Another paragraph.
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 
@@ -153,12 +167,18 @@ fn test_links_and_images() {
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 
     // Check for links and images
-    assert!(html.contains(r#"<a href="https://www.rust-lang.org/">Link to Rust</a>"#));
+    assert!(html.contains(
+        r#"<a href="https://www.rust-lang.org/">Link to Rust</a>"#
+    ));
     assert!(html.contains(r#"<img src="https://www.rust-lang.org/static/images/rust-logo-blk.svg" alt="Rust logo" />"#));
 }
 
@@ -187,7 +207,11 @@ fn test_lists_and_blockquotes() {
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 
@@ -221,7 +245,11 @@ Another line followed by an HR.
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 
@@ -253,7 +281,11 @@ fn test_strikethrough_and_tasklist() {
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 
@@ -266,8 +298,13 @@ fn test_strikethrough_and_tasklist() {
     // Check for task list with correct HTML structure
     assert!(html.contains(r#"<li><input type="checkbox" checked="" disabled="" /> Task 1</li>"#),
         "Task list rendering failed. Actual HTML: {}", html);
-    assert!(html.contains(r#"<li><input type="checkbox" disabled="" /> Task 2</li>"#),
-        "Task list rendering failed. Actual HTML: {}", html);
+    assert!(
+        html.contains(
+            r#"<li><input type="checkbox" disabled="" /> Task 2</li>"#
+        ),
+        "Task list rendering failed. Actual HTML: {}",
+        html
+    );
 }
 
 #[test]
@@ -290,7 +327,11 @@ Here is a URL: https://www.example.com
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 
@@ -320,7 +361,11 @@ fn test_nested_blockquotes() {
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 
@@ -348,7 +393,11 @@ fn test_emphasis_in_block_elements() {
         });
 
     let result = process_markdown(markdown, &options);
-    assert!(result.is_ok(), "Markdown processing failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Markdown processing failed: {:?}",
+        result.err()
+    );
 
     let html = result.unwrap();
 

@@ -36,8 +36,7 @@ fn test_markdown_with_extensions() {
 
 #[test]
 fn test_markdown_with_links() {
-    let markdown =
-        "[MDX Generator](https://mdxgen.com/)";
+    let markdown = "[MDX Generator](https://mdxgen.com/)";
     let options = MarkdownOptions::new()
         .with_enhanced_tables(false) // Disable enhanced tables for this test
         .with_comrak_options({

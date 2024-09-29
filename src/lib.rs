@@ -48,7 +48,8 @@
 //! use mdx_gen::{process_markdown, MarkdownOptions};
 //!
 //! let markdown_content = "# Hello, world!\n\nThis is a paragraph.";
-//! let options = MarkdownOptions::new();
+//! let options = MarkdownOptions::new()
+//!     .with_enhanced_tables(false);
 //! let html = process_markdown(markdown_content, &options).unwrap();
 //! println!("HTML output: {}", html);
 //! ```
@@ -67,16 +68,20 @@
 //! fn main() {
 //!     println!("Hello, world!");
 //! }
-//!
 //! "#;
 //!
 //! let options = MarkdownOptions::new()
 //!     .with_custom_blocks(true)
-//!     .with_syntax_highlighting(true);
+//!     .with_syntax_highlighting(true)
+//!     .with_enhanced_tables(true)
+//!     .with_comrak_options({
+//!         let mut opts = comrak::ComrakOptions::default();
+//!         opts.extension.table = true;
+//!         opts
+//!     });
 //!
 //! let html = process_markdown(markdown_content, &options).unwrap();
 //! println!("HTML output: {}", html);
-//!
 //! ```
 
 #![doc(
