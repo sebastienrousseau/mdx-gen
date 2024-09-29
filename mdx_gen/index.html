@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="MDX Generator (mdx-gen)"><title>mdx_gen - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-b778ab399e080a4b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="mdx_gen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.83.0-nightly (ed04567ba 2024-09-28)" data-channel="nightly" data-search-js="search-e056c65ede92db13.js" data-settings-js="settings-805db61a62df4bd2.js" ><script src="../static.files/storage-1d39b6787ed640ff.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-54bc299d2a5e4e43.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-0111fcff984fae8f.css"></noscript><link rel="icon" href="https://kura.pro/mdx-gen/images/favicon.ico"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../mdx_gen/index.html"><img src="https://kura.pro/mdx-gen/images/logos/mdx-gen.svg" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../mdx_gen/index.html"><img src="https://kura.pro/mdx-gen/images/logos/mdx-gen.svg" alt="logo"></a><h2><a href="../mdx_gen/index.html">mdx_gen</a><span class="version">0.0.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#mdx-generator-mdx-gen" title="MDX Generator (mdx-gen)">MDX Generator (mdx-gen)</a><ul><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#installation" title="Installation">Installation</a></li><li><a href="#usage" title="Usage">Usage</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>mdx_gen</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/mdx_gen/lib.rs.html#3-106">source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="mdx-generator-mdx-gen"><a class="doc-anchor" href="#mdx-generator-mdx-gen">§</a>MDX Generator (mdx-gen)</h2>
+<p>A robust Rust library for processing Markdown into responsive HTML, offering custom blocks, syntax highlighting, and enhanced table formatting for richer content.</p>
+<h3 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h3>
+<p><code>mdx-gen</code> is a flexible Rust library that converts Markdown into HTML, providing enhanced features like custom block extensions, syntax highlighting, and table formatting.</p>
+<p><code>mdx-gen</code> uses the high-performance <code>comrak</code> library for Markdown parsing and offers flexible options for modifying and extending Markdown behavior.</p>
+<h4 id="key-features"><a class="doc-anchor" href="#key-features">§</a>Key Features</h4>
+<ul>
+<li><strong>Markdown to HTML Conversion</strong>: Converts Markdown to responsive HTML using the <code>comrak</code> parser, ensuring fast and accurate rendering of Markdown content.</li>
+<li><strong>Custom Block Extensions</strong>: Allows the use of custom blocks such as notes, warnings, and tips, transforming them into structured HTML elements for improved content formatting.</li>
+<li><strong>Syntax Highlighting</strong>: Automatically applies syntax highlighting to code blocks for a wide range of programming languages, making code snippets more readable and professional.</li>
+<li><strong>Enhanced Table Formatting</strong>: Converts Markdown tables into responsive HTML tables with proper alignment and additional styling for better usability across devices.</li>
+<li><strong>Flexible Configuration</strong>: Provides a customizable <code>MarkdownOptions</code> structure that allows developers to enable or disable specific features (e.g., custom blocks, enhanced tables, or syntax highlighting).</li>
+<li><strong>Error Handling</strong>: Comprehensive error handling system with detailed error reporting to ensure smooth Markdown processing, even in complex cases.</li>
+</ul>
+<h4 id="supported-extensions"><a class="doc-anchor" href="#supported-extensions">§</a>Supported Extensions</h4>
+<p><code>mdx-gen</code> offers the following extensions, which can be enabled or disabled individually via <code>MarkdownOptions</code>:</p>
+<ul>
+<li>Custom blocks (notes, warnings, tips)</li>
+<li>Enhanced table formatting with responsive design</li>
+<li>Syntax highlighting for code blocks</li>
+<li>Strikethrough and autolink support</li>
+<li>Advanced error reporting for improved debugging</li>
+</ul>
+<h3 id="installation"><a class="doc-anchor" href="#installation">§</a>Installation</h3>
+<p>Add this to your <code>Cargo.toml</code>:</p>
+<div class="example-wrap"><pre class="language-toml"><code>[dependencies]
+mdx-gen = &quot;0.0.1&quot;</code></pre></div><h3 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h3>
+<p>Here are some examples of how to use the library:</p>
+<h4 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic Usage</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>mdx_gen::{process_markdown, MarkdownOptions};
+
+<span class="kw">let </span>markdown_content = <span class="string">"# Hello, world!\n\nThis is a paragraph."</span>;
+<span class="kw">let </span>options = MarkdownOptions::new();
+<span class="kw">let </span>html = process_markdown(markdown_content, <span class="kw-2">&amp;</span>options).unwrap();
+<span class="macro">println!</span>(<span class="string">"HTML output: {}"</span>, html);</code></pre></div>
+<h4 id="custom-blocks-and-syntax-highlighting"><a class="doc-anchor" href="#custom-blocks-and-syntax-highlighting">§</a>Custom Blocks and Syntax Highlighting</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>mdx_gen::{process_markdown, MarkdownOptions};
+
+<span class="kw">let </span>markdown_content = <span class="string">r#"
+
+&lt;div class="note"&gt;This is a note.&lt;/div&gt;
+
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+
+"#</span>;
+
+<span class="kw">let </span>options = MarkdownOptions::new()
+    .with_custom_blocks(<span class="bool-val">true</span>)
+    .with_syntax_highlighting(<span class="bool-val">true</span>);
+
+<span class="kw">let </span>html = process_markdown(markdown_content, <span class="kw-2">&amp;</span>options).unwrap();
+<span class="macro">println!</span>(<span class="string">"HTML output: {}"</span>, html);
+</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.MarkdownError"><code>pub use error::<a class="enum" href="error/enum.MarkdownError.html" title="enum mdx_gen::error::MarkdownError">MarkdownError</a>;</code></div></li><li><div class="item-name" id="reexport.apply_syntax_highlighting"><code>pub use extensions::<a class="fn" href="extensions/fn.apply_syntax_highlighting.html" title="fn mdx_gen::extensions::apply_syntax_highlighting">apply_syntax_highlighting</a>;</code></div></li><li><div class="item-name" id="reexport.ColumnAlignment"><code>pub use extensions::<a class="enum" href="extensions/enum.ColumnAlignment.html" title="enum mdx_gen::extensions::ColumnAlignment">ColumnAlignment</a>;</code></div></li><li><div class="item-name" id="reexport.CustomBlockType"><code>pub use extensions::<a class="enum" href="extensions/enum.CustomBlockType.html" title="enum mdx_gen::extensions::CustomBlockType">CustomBlockType</a>;</code></div></li><li><div class="item-name" id="reexport.process_markdown"><code>pub use markdown::<a class="fn" href="markdown/fn.process_markdown.html" title="fn mdx_gen::markdown::process_markdown">process_markdown</a>;</code></div></li><li><div class="item-name" id="reexport.MarkdownOptions"><code>pub use markdown::<a class="struct" href="markdown/struct.MarkdownOptions.html" title="struct mdx_gen::markdown::MarkdownOptions">MarkdownOptions</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="error/index.html" title="mod mdx_gen::error">error</a></div><div class="desc docblock-short">The <code>error</code> module contains error types for Markdown processing.
+Error handling for the MDX Gen library.</div></li><li><div class="item-name"><a class="mod" href="extensions/index.html" title="mod mdx_gen::extensions">extensions</a></div><div class="desc docblock-short">The <code>extensions</code> module contains custom block extensions for Markdown processing.
+Extension functionality for the MDX Gen library.</div></li><li><div class="item-name"><a class="mod" href="markdown/index.html" title="mod mdx_gen::markdown">markdown</a></div><div class="desc docblock-short">The <code>markdown</code> module contains functions for parsing, converting, and rendering Markdown.
+Core Markdown processing functionality.</div></li></ul><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="type" href="type.ComrakOptions.html" title="type mdx_gen::ComrakOptions">Comrak<wbr>Options</a></div><div class="desc docblock-short">Re-export comrak options for convenience
+Legacy naming of [<code>Options</code>]</div></li></ul></section></div></main></body></html>

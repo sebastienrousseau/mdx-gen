@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ColumnAlignment","CustomBlockType"],"fn":["apply_syntax_highlighting","process_custom_blocks","process_tables"]};
