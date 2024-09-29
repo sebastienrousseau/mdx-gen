@@ -1,10 +1,9 @@
 //! Error handling for the MDX Gen library.
 
 use anyhow::{Context, Result};
-use thiserror::Error;
 
-/// Errors that can occur during Markdown processing.
-#[derive(Error, Debug)]
+/// Represents all the errors that can occur during Markdown processing.
+#[derive(thiserror::Error, Debug)]
 pub enum MarkdownError {
     /// An error occurred while parsing the Markdown content.
     #[error("Failed to parse Markdown: {0}")]

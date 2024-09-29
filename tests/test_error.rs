@@ -3,6 +3,7 @@ mod tests {
     use anyhow::Result;
     use mdx_gen::{error::parse_markdown_with_context, MarkdownError};
 
+    /// Test the MarkdownError::ParseError variant.
     #[test]
     fn test_markdown_error_parse_error() {
         let error =
@@ -13,6 +14,7 @@ mod tests {
         );
     }
 
+    /// Test the MarkdownError::ConversionError variant.
     #[test]
     fn test_markdown_error_conversion_error() {
         let error = MarkdownError::ConversionError(
@@ -24,6 +26,7 @@ mod tests {
         );
     }
 
+    /// Test the MarkdownError::CustomBlockError variant.
     #[test]
     fn test_markdown_error_custom_block_error() {
         let error = MarkdownError::CustomBlockError(
@@ -35,6 +38,7 @@ mod tests {
         );
     }
 
+    /// Test the MarkdownError::SyntaxHighlightError variant.
     #[test]
     fn test_markdown_error_syntax_highlight_error() {
         let error = MarkdownError::SyntaxHighlightError(
@@ -46,6 +50,7 @@ mod tests {
         );
     }
 
+    /// Test the MarkdownError::InvalidOptionsError variant.
     #[test]
     fn test_markdown_error_invalid_options_error() {
         let error = MarkdownError::InvalidOptionsError(
@@ -57,6 +62,7 @@ mod tests {
         );
     }
 
+    /// Test the MarkdownError::SyntaxHighlightingError variant.
     #[test]
     fn test_markdown_error_syntax_highlighting_error() {
         let error = MarkdownError::SyntaxHighlightingError(
@@ -68,6 +74,7 @@ mod tests {
         );
     }
 
+    /// Test for parsing valid markdown content.
     #[test]
     fn test_parse_markdown_with_context_success() -> Result<()> {
         let result =
@@ -76,19 +83,17 @@ mod tests {
         Ok(())
     }
 
+    /// Test for parsing invalid markdown content (empty input).
     #[test]
     fn test_parse_markdown_with_context_failure() {
         let result = parse_markdown_with_context("");
         assert!(result.is_err());
 
-        // Extract the original error from the context
         let error = result.unwrap_err();
 
-        // Ensure the error contains the "Failed while parsing markdown content"
         assert!(format!("{}", error)
             .contains("Failed while parsing markdown content"));
 
-        // Check the source of the error to see if it's the "Input is empty" error
         if let Some(source) = error.source() {
             assert_eq!(
                 source.to_string(),
@@ -97,5 +102,15 @@ mod tests {
         } else {
             panic!("Expected an underlying error");
         }
+    }
+
+    /// Test handling of empty markdown input.
+    #[test]
+    fn test_empty_markdown_input() {
+        let result = parse_markdown_with_context("");
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(format!("{}", error)
+            .contains("Failed while parsing markdown content"));
     }
 }
