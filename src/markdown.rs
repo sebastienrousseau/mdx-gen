@@ -2,7 +2,6 @@
 //!
 //! This module handles the conversion of Markdown content into HTML,
 //! with support for custom blocks, enhanced tables, and syntax highlighting.
-//!
 
 use crate::error::MarkdownError;
 use crate::extensions::{
@@ -12,9 +11,10 @@ use comrak::{markdown_to_html, ComrakOptions};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use regex::Regex;
+use std::fmt;
 
 /// Options for configuring Markdown processing behavior.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MarkdownOptions<'a> {
     /// Options for the underlying Comrak Markdown parser.
     pub comrak_options: ComrakOptions<'a>,
@@ -92,24 +92,24 @@ impl<'a> MarkdownOptions<'a> {
     }
 }
 
+impl fmt::Debug for MarkdownOptions<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MarkdownOptions")
+            .field("enable_custom_blocks", &self.enable_custom_blocks)
+            .field(
+                "enable_syntax_highlighting",
+                &self.enable_syntax_highlighting,
+            )
+            .field(
+                "enable_enhanced_tables",
+                &self.enable_enhanced_tables,
+            )
+            .field("syntax_theme", &self.syntax_theme)
+            .finish()
+    }
+}
+
 /// Creates a new instance of `MarkdownOptions` with default values.
-///
-/// # Purpose
-///
-/// This function initializes a `MarkdownOptions` struct with default settings for processing Markdown content.
-///
-/// # Parameters
-///
-/// This function does not take any parameters.
-///
-/// # Return
-///
-/// Returns a `MarkdownOptions` instance with the following default settings:
-/// - Custom blocks are enabled.
-/// - Syntax highlighting is enabled.
-/// - Enhanced table formatting is enabled.
-/// - The Comrak Markdown parser's table extension is enabled.
-///
 pub fn default_markdown_options() -> MarkdownOptions<'static> {
     MarkdownOptions::new()
         .with_custom_blocks(true)
@@ -124,29 +124,6 @@ pub fn default_markdown_options() -> MarkdownOptions<'static> {
 
 /// Processes the input Markdown content and converts it into HTML.
 /// Applies custom blocks, syntax highlighting, and enhanced tables based on the provided options.
-///
-/// # Arguments
-///
-/// * `content` - The input Markdown string to be processed.
-/// * `options` - The configuration options for Markdown processing.
-///
-/// # Returns
-///
-/// A result containing the generated HTML string or an error if processing fails.
-///
-/// # Example
-///
-/// ```
-/// use mdx_gen::MarkdownOptions;
-/// use mdx_gen::process_markdown;
-/// use mdx_gen::ComrakOptions;
-/// use mdx_gen::markdown::default_markdown_options;
-///
-/// let markdown = "# Title\n\nSome text.";
-/// let options = default_markdown_options();
-/// let html = process_markdown(markdown, &options).unwrap();
-/// println!("{}", html);
-/// ```
 pub fn process_markdown(
     content: &str,
     options: &MarkdownOptions,
@@ -157,7 +134,7 @@ pub fn process_markdown(
     // Validate options
     if let Err(msg) = options.validate() {
         warn!("Invalid MarkdownOptions: {}", msg);
-        return Err(MarkdownError::ConversionError(msg));
+        return Err(MarkdownError::InvalidOptionsError(msg));
     }
 
     // Clone Comrak options and enable unsafe rendering
@@ -167,11 +144,18 @@ pub fn process_markdown(
     // Convert Markdown to initial HTML
     debug!("Converting markdown to HTML using Comrak");
     let mut html = markdown_to_html(content, &comrak_opts);
+    debug!("Initial HTML conversion result: {}", html);
 
     // Apply syntax highlighting if enabled
     if options.enable_syntax_highlighting {
         debug!("Applying syntax highlighting");
-        html = highlight_code_blocks(&html)?;
+        match highlight_code_blocks(&html) {
+            Ok(highlighted) => html = highlighted,
+            Err(e) => {
+                warn!("Error during syntax highlighting: {:?}", e);
+                return Err(e);
+            }
+        }
     }
 
     // Process enhanced tables if enabled
@@ -190,74 +174,69 @@ pub fn process_markdown(
     Ok(html)
 }
 
-/// Highlights code blocks in the generated HTML using the specified syntax highlighter.
-///
-/// # Arguments
-///
-/// * `html` - The input HTML string that contains code blocks.
-/// * `options` - The configuration options, including the theme for syntax highlighting.
-///
-/// # Returns
-///
-/// A result containing the HTML with highlighted code or an error if highlighting fails.
-///
-/// # Example
-///
-/// ```
-/// use mdx_gen::ComrakOptions;
-/// use mdx_gen::{MarkdownOptions, process_markdown};
-/// use mdx_gen::markdown::default_markdown_options;
-///
-/// let markdown = "```rust\nfn main() { println!(\"Hello, world!\"); }\n```";
-/// let options = default_markdown_options();
-///
-/// // Process the markdown to HTML
-/// let highlighted_html = process_markdown(markdown, &options).unwrap();
-/// println!("{}", highlighted_html);
-/// ```
+lazy_static! {
+    static ref CODE_BLOCK_RE: Regex = Regex::new(
+        r#"(?s)<pre><code class="language-(.*?)">(.*?)</code></pre>"#
+    )
+    .unwrap();
+}
+
 fn highlight_code_blocks(html: &str) -> Result<String, MarkdownError> {
     debug!("Highlighting code blocks");
-
-    lazy_static! {
-        static ref CODE_BLOCK_RE: Regex = Regex::new(
-            r#"(?s)<pre><code class="language-(.*?)">(.*?)</code></pre>"#
-        ).unwrap();
-    }
 
     let mut highlighted_html = String::new();
     let mut last_end = 0;
 
-    // Iterate over captured code blocks and apply syntax highlighting
     for cap in CODE_BLOCK_RE.captures_iter(html) {
-        let before = &html[last_end..cap.get(0).unwrap().start()];
-        highlighted_html.push_str(before);
+        highlighted_html
+            .push_str(&html[last_end..cap.get(0).unwrap().start()]);
 
-        let lang = &cap[1];
-        let code = html_escape::decode_html_entities(&cap[2]);
+        let (lang, code) = extract_code_block(&cap)?;
+        let highlighted_code = highlight_code(lang, &code)?;
 
-        debug!(
-            "Attempting to highlight code block with language: {}",
-            lang
-        );
-        let highlighted_code = apply_syntax_highlighting(&code, lang)
-            .map_err(|e| {
-            MarkdownError::ConversionError(format!(
-                "Failed to highlight code block in language '{}': {}",
-                lang, e
-            ))
-        })?;
-        debug!("Highlighted code: {}", highlighted_code);
-
-        highlighted_html.push_str(&format!(
-            "<pre><code class=\"language-{}\">{}</code></pre>",
-            lang, highlighted_code
+        highlighted_html.push_str(&format_highlighted_code(
+            lang,
+            &highlighted_code,
         ));
         last_end = cap.get(0).unwrap().end();
     }
 
-    // Append the remaining portion of the HTML
     highlighted_html.push_str(&html[last_end..]);
     Ok(highlighted_html)
+}
+
+fn extract_code_block<'a>(
+    cap: &'a regex::Captures<'a>,
+) -> Result<(&'a str, String), MarkdownError> {
+    let lang = &cap[1];
+    let code = html_escape::decode_html_entities(&cap[2]);
+    Ok((lang, code.to_string()))
+}
+
+fn highlight_code(
+    lang: &str,
+    code: &str,
+) -> Result<String, MarkdownError> {
+    debug!(
+        "Attempting to highlight code block with language: {}",
+        lang
+    );
+    apply_syntax_highlighting(code, lang).map_err(|e| {
+        MarkdownError::ConversionError(format!(
+            "Failed to highlight code block in language '{}': {}",
+            lang, e
+        ))
+    })
+}
+
+fn format_highlighted_code(
+    lang: &str,
+    highlighted_code: &str,
+) -> String {
+    format!(
+        "<pre><code class=\"language-{}\">{}</code></pre>",
+        lang, highlighted_code
+    )
 }
 
 #[cfg(test)]
@@ -409,7 +388,6 @@ fn main() {
     #[test]
     fn test_process_markdown_with_invalid_options() {
         let markdown = "# Test\n\n| Column 1 | Column 2 |\n| -------- | -------- |\n| Value 1  | Value 2  |";
-
         let options = MarkdownOptions::new()
             .with_enhanced_tables(true)
             .with_comrak_options({
@@ -417,12 +395,11 @@ fn main() {
                 opts.extension.table = false;
                 opts
             });
-
         let result = process_markdown(markdown, &options);
         assert!(result.is_err());
         assert!(matches!(
             result,
-            Err(MarkdownError::ConversionError(_))
+            Err(MarkdownError::InvalidOptionsError(_))
         ));
     }
 

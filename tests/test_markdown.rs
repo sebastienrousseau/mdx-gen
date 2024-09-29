@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use comrak::ComrakOptions;
-    use mdx_gen::MarkdownError;
     use mdx_gen::{process_markdown, MarkdownOptions};
 
     #[test]
@@ -97,19 +96,43 @@ mod tests {
     }
 
     #[test]
-    fn test_process_markdown_with_invalid_markdown() {
-        let markdown = "<div>This is an invalid <b>Markdown</b></div>";
-        let options = MarkdownOptions::new().with_comrak_options({
-            let mut opts = ComrakOptions::default();
-            opts.extension.table = false;
-            opts
-        });
+    fn test_process_markdown_with_html_tags() {
+        let markdown =
+            "<div>This is Markdown with <b>HTML tags</b></div>";
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false) // Disable enhanced tables
+            .with_comrak_options({
+                let mut opts = ComrakOptions::default();
+                opts.extension.table = false;
+                opts
+            });
         let result = process_markdown(markdown, &options);
-        assert!(result.is_err());
-        assert!(matches!(
-            result,
-            Err(MarkdownError::ConversionError(_))
-        ));
+        assert!(result.is_ok(), "Processing Markdown with HTML tags should not result in an error. Error: {:?}", result.err());
+        let html = result.unwrap();
+        assert!(
+            html.contains("<div>"),
+            "HTML tags should be preserved in the output"
+        );
+        assert!(
+            html.contains("<b>"),
+            "Nested HTML tags should be preserved in the output"
+        );
+    }
+
+    #[test]
+    fn test_process_markdown_with_invalid_markdown() {
+        let markdown = "This is not really invalid Markdown";
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false) // Disable enhanced tables
+            .with_comrak_options({
+                let mut opts = ComrakOptions::default();
+                opts.extension.table = false;
+                opts
+            });
+        let result = process_markdown(markdown, &options);
+        assert!(result.is_ok(), "Processing invalid Markdown should not result in an error. Error: {:?}", result.err());
+        let html = result.unwrap();
+        assert!(!html.is_empty(), "Resulting HTML should not be empty");
     }
 
     #[test]
