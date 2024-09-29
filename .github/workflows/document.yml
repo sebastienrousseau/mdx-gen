@@ -46,7 +46,7 @@ jobs:
           retention-days: 1
 
       - name: Write CNAME file
-        run: echo 'doc.mdx-gen.co' > ./target/doc/CNAME
+        run: echo 'doc.mdxgen.com' > ./target/doc/CNAME
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4.0.0
