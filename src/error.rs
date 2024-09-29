@@ -33,9 +33,9 @@ pub enum MarkdownError {
 
 /// A helper function that adds context to errors occurring during Markdown processing.
 pub fn parse_markdown_with_context(input: &str) -> Result<String> {
-    // Example of adding context using anyhow
+    // Add context without overriding the original error message
     let parsed_content = some_markdown_parsing_function(input)
-        .context("Failed while parsing markdown content")?;
+        .with_context(|| "Failed while parsing markdown content")?;
 
     Ok(parsed_content)
 }

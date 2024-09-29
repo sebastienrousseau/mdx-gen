@@ -48,7 +48,7 @@ pub enum CustomBlockType {
 
 impl CustomBlockType {
     /// Returns the appropriate Bootstrap alert class for the custom block type.
-    fn get_alert_class(&self) -> &'static str {
+    pub fn get_alert_class(&self) -> &'static str {
         match self {
             CustomBlockType::Note => "alert-info",
             CustomBlockType::Warning => "alert-warning",
@@ -60,7 +60,7 @@ impl CustomBlockType {
     }
 
     /// Returns the title for the custom block type.
-    fn get_title(&self) -> &'static str {
+    pub fn get_title(&self) -> &'static str {
         match self {
             CustomBlockType::Note => "Note",
             CustomBlockType::Warning => "Warning",
