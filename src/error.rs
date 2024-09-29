@@ -27,7 +27,7 @@ pub enum MarkdownError {
 
     /// An error occurred while loading a syntax set.
     #[error("Failed to load syntax set: {0}")]
-    SyntaxHighlightingError(String),
+    SyntaxSetError(String),
 }
 
 /// A helper function that adds context to errors occurring during Markdown processing.
@@ -43,7 +43,48 @@ pub fn parse_markdown_with_context(input: &str) -> Result<String> {
 fn some_markdown_parsing_function(input: &str) -> Result<String> {
     // Simulate success or failure
     if input.is_empty() {
-        Err(MarkdownError::ParseError("Input is empty".to_string()))?;
+        return Err(MarkdownError::ParseError(
+            "Input is empty".to_string(),
+        )
+        .into());
     }
     Ok("Parsed markdown content".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_empty_input() {
+        let result = some_markdown_parsing_function("");
+        assert!(result.is_err());
+
+        if let Err(err) = result {
+            assert_eq!(
+                format!("{}", err),
+                "Failed to parse Markdown: Input is empty"
+            );
+        }
+    }
+
+    #[test]
+    fn test_successful_parse() {
+        let result =
+            some_markdown_parsing_function("Some markdown content");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Parsed markdown content");
+    }
+
+    #[test]
+    fn test_parse_markdown_with_context() {
+        let result = parse_markdown_with_context("");
+        assert!(result.is_err());
+
+        if let Err(err) = result {
+            let err_msg = format!("{:?}", err);
+            assert!(err_msg
+                .contains("Failed while parsing markdown content"));
+        }
+    }
 }

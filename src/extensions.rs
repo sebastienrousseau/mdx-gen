@@ -6,6 +6,7 @@
 use crate::error::MarkdownError;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::str::FromStr;
 use syntect::{
     highlighting::ThemeSet, html::highlighted_html_for_string,
     parsing::SyntaxSet,
@@ -72,6 +73,25 @@ impl CustomBlockType {
     }
 }
 
+impl FromStr for CustomBlockType {
+    type Err = MarkdownError;
+
+    fn from_str(block_type: &str) -> Result<Self, Self::Err> {
+        match block_type.to_lowercase().as_str() {
+            "note" => Ok(CustomBlockType::Note),
+            "warning" => Ok(CustomBlockType::Warning),
+            "tip" => Ok(CustomBlockType::Tip),
+            "info" => Ok(CustomBlockType::Info),
+            "important" => Ok(CustomBlockType::Important),
+            "caution" => Ok(CustomBlockType::Caution),
+            _ => Err(MarkdownError::CustomBlockError(format!(
+                "Unknown block type: {}",
+                block_type
+            ))),
+        }
+    }
+}
+
 lazy_static! {
     static ref CUSTOM_BLOCK_REGEX: Regex = Regex::new(
         r#"(?i)<div\s+class=["']?(note|warning|tip|info|important|caution)["']?>(.*?)</div>"#
@@ -92,9 +112,7 @@ pub fn apply_syntax_highlighting(
     code: &str,
     lang: &str,
 ) -> Result<String, MarkdownError> {
-    // Use cached SyntaxSet and ThemeSet
     let theme = &THEME_SET.themes["base16-ocean.dark"];
-
     let syntax = SYNTAX_SET
         .find_syntax_by_token(lang)
         .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
@@ -154,24 +172,41 @@ pub fn process_tables(table_html: &str) -> String {
 ///
 /// A string containing the processed Markdown content with custom blocks replaced by Bootstrap alert elements.
 pub fn process_custom_blocks(content: &str) -> String {
-    CUSTOM_BLOCK_REGEX.replace_all(content, |caps: &regex::Captures| {
-        let block_type = match caps.get(1).unwrap().as_str().to_lowercase().as_str() {
-            "note" => CustomBlockType::Note,
-            "warning" => CustomBlockType::Warning,
-            "tip" => CustomBlockType::Tip,
-            "info" => CustomBlockType::Info,
-            "important" => CustomBlockType::Important,
-            "caution" => CustomBlockType::Caution,
-            _ => unreachable!(),
-        };
-        let block_content = &caps[2];
-        format!(
-            r#"<div class="alert {}" role="alert"><strong>{}:</strong> {}</div>"#,
-            block_type.get_alert_class(),
-            block_type.get_title(),
-            block_content
-        )
-    }).to_string()
+    // Adjusted to match any block type (including unknown ones)
+    Regex::new(r#"<div\s+class=["']?(.*?)["']?>(.*?)</div>"#)
+        .unwrap()
+        .replace_all(content, |caps: &regex::Captures| {
+            match CustomBlockType::from_str(caps.get(1).unwrap().as_str()) {
+                Ok(block_type) => generate_custom_block_html(block_type, &caps[2]),
+                Err(e) => format!(
+                    r#"<div class="alert alert-danger" role="alert"><strong>Error:</strong> {}</div>"#,
+                    e
+                ),
+            }
+        })
+        .to_string()
+}
+
+/// Generates the HTML for a custom block based on its type and content.
+///
+/// # Arguments
+///
+/// * `block_type` - The type of the custom block.
+/// * `block_content` - The content inside the custom block.
+///
+/// # Returns
+///
+/// A string containing the HTML for the custom block.
+fn generate_custom_block_html(
+    block_type: CustomBlockType,
+    block_content: &str,
+) -> String {
+    format!(
+        r#"<div class="alert {}" role="alert"><strong>{}:</strong> {}</div>"#,
+        block_type.get_alert_class(),
+        block_type.get_title(),
+        block_content
+    )
 }
 
 #[cfg(test)]
@@ -197,6 +232,18 @@ mod tests {
         assert!(processed.contains(r#"<div class="alert alert-primary" role="alert"><strong>Info:</strong> This is an info block.</div>"#));
         assert!(processed.contains(r#"<div class="alert alert-danger" role="alert"><strong>Important:</strong> This is important.</div>"#));
         assert!(processed.contains(r#"<div class="alert alert-secondary" role="alert"><strong>Caution:</strong> This is a caution.</div>"#));
+    }
+
+    #[test]
+    fn test_unknown_custom_block() {
+        let input = r#"<div class="unknown">This is an unknown block type.</div>"#;
+        let processed = process_custom_blocks(input);
+
+        // Print the processed output to verify the content
+        println!("Processed content: {}", processed);
+
+        // Check if the error is correctly reported in the output
+        assert!(processed.contains(r#"Failed to process custom block: Unknown block type: unknown"#), "Expected error message for unknown block type not found");
     }
 
     #[test]

@@ -9,7 +9,9 @@ use crate::extensions::{
     apply_syntax_highlighting, process_custom_blocks, process_tables,
 };
 use comrak::{markdown_to_html, ComrakOptions};
+use lazy_static::lazy_static;
 use log::{debug, info, warn};
+use regex::Regex;
 
 /// Options for configuring Markdown processing behavior.
 #[derive(Debug, Clone)]
@@ -22,17 +24,20 @@ pub struct MarkdownOptions<'a> {
     pub enable_syntax_highlighting: bool,
     /// Enable or disable enhanced table formatting.
     pub enable_enhanced_tables: bool,
+    /// Optional custom theme for syntax highlighting.
+    pub syntax_theme: Option<String>,
 }
 
 impl<'a> Default for MarkdownOptions<'a> {
     /// Provides default options where custom blocks, syntax highlighting,
-    /// and enhanced tables are all enabled.
+    /// and enhanced tables are all enabled, with default theme.
     fn default() -> Self {
         Self {
             comrak_options: ComrakOptions::default(),
             enable_custom_blocks: true,
             enable_syntax_highlighting: true,
             enable_enhanced_tables: true,
+            syntax_theme: None, // Default: no custom theme
         }
     }
 }
@@ -44,50 +49,30 @@ impl<'a> MarkdownOptions<'a> {
     }
 
     /// Enables or disables custom blocks.
-    ///
-    /// # Example
-    /// ```
-    /// use mdx_gen::MarkdownOptions;
-    /// let options = MarkdownOptions::new().with_custom_blocks(true);
-    /// ```
     pub fn with_custom_blocks(mut self, enable: bool) -> Self {
         self.enable_custom_blocks = enable;
         self
     }
 
     /// Enables or disables syntax highlighting for code blocks.
-    ///
-    /// # Example
-    /// ```
-    /// use mdx_gen::MarkdownOptions;
-    /// let options = MarkdownOptions::new().with_syntax_highlighting(false);
-    /// ```
     pub fn with_syntax_highlighting(mut self, enable: bool) -> Self {
         self.enable_syntax_highlighting = enable;
         self
     }
 
     /// Enables or disables enhanced table formatting.
-    ///
-    /// # Example
-    /// ```
-    /// use mdx_gen::MarkdownOptions;
-    /// let options = MarkdownOptions::new().with_enhanced_tables(true);
-    /// ```
     pub fn with_enhanced_tables(mut self, enable: bool) -> Self {
         self.enable_enhanced_tables = enable;
         self
     }
 
+    /// Sets a custom theme for syntax highlighting.
+    pub fn with_custom_theme(mut self, theme: String) -> Self {
+        self.syntax_theme = Some(theme);
+        self
+    }
+
     /// Sets custom Comrak options.
-    ///
-    /// # Example
-    /// ```
-    /// use comrak::ComrakOptions;
-    /// use mdx_gen::MarkdownOptions;
-    /// let custom_comrak_options = ComrakOptions::default();
-    /// let options = MarkdownOptions::new().with_comrak_options(custom_comrak_options);
-    /// ```
     pub fn with_comrak_options(
         mut self,
         options: ComrakOptions<'a>,
@@ -97,9 +82,6 @@ impl<'a> MarkdownOptions<'a> {
     }
 
     /// Validates the `MarkdownOptions` to ensure they are consistent and compatible.
-    ///
-    /// # Returns
-    /// A `Result` indicating whether the options are valid, with an error message if not.
     pub fn validate(&self) -> Result<(), String> {
         if self.enable_enhanced_tables
             && !self.comrak_options.extension.table
@@ -110,16 +92,61 @@ impl<'a> MarkdownOptions<'a> {
     }
 }
 
+/// Creates a new instance of `MarkdownOptions` with default values.
+///
+/// # Purpose
+///
+/// This function initializes a `MarkdownOptions` struct with default settings for processing Markdown content.
+///
+/// # Parameters
+///
+/// This function does not take any parameters.
+///
+/// # Return
+///
+/// Returns a `MarkdownOptions` instance with the following default settings:
+/// - Custom blocks are enabled.
+/// - Syntax highlighting is enabled.
+/// - Enhanced table formatting is enabled.
+/// - The Comrak Markdown parser's table extension is enabled.
+///
+pub fn default_markdown_options() -> MarkdownOptions<'static> {
+    MarkdownOptions::new()
+        .with_custom_blocks(true)
+        .with_syntax_highlighting(true)
+        .with_enhanced_tables(true)
+        .with_comrak_options({
+            let mut opts = ComrakOptions::default();
+            opts.extension.table = true;
+            opts
+        })
+}
+
 /// Processes the input Markdown content and converts it into HTML.
 /// Applies custom blocks, syntax highlighting, and enhanced tables based on the provided options.
 ///
 /// # Arguments
-/// * `content` - The input Markdown content as a string slice.
-/// * `options` - Configuration options to enable or disable specific features.
+///
+/// * `content` - The input Markdown string to be processed.
+/// * `options` - The configuration options for Markdown processing.
 ///
 /// # Returns
-/// A `Result` containing the processed HTML string, or a `MarkdownError` if processing fails.
 ///
+/// A result containing the generated HTML string or an error if processing fails.
+///
+/// # Example
+///
+/// ```
+/// use mdx_gen::MarkdownOptions;
+/// use mdx_gen::process_markdown;
+/// use mdx_gen::ComrakOptions;
+/// use mdx_gen::markdown::default_markdown_options;
+///
+/// let markdown = "# Title\n\nSome text.";
+/// let options = default_markdown_options();
+/// let html = process_markdown(markdown, &options).unwrap();
+/// println!("{}", html);
+/// ```
 pub fn process_markdown(
     content: &str,
     options: &MarkdownOptions,
@@ -164,34 +191,62 @@ pub fn process_markdown(
 }
 
 /// Highlights code blocks in the generated HTML using the specified syntax highlighter.
-/// This function searches for code blocks marked with a language and applies the appropriate
-/// syntax highlighting.
 ///
 /// # Arguments
-/// * `html` - The input HTML containing code blocks.
+///
+/// * `html` - The input HTML string that contains code blocks.
+/// * `options` - The configuration options, including the theme for syntax highlighting.
 ///
 /// # Returns
-/// A `Result` containing the HTML with highlighted code blocks, or a `MarkdownError` if highlighting fails.
+///
+/// A result containing the HTML with highlighted code or an error if highlighting fails.
+///
+/// # Example
+///
+/// ```
+/// use mdx_gen::ComrakOptions;
+/// use mdx_gen::{MarkdownOptions, process_markdown};
+/// use mdx_gen::markdown::default_markdown_options;
+///
+/// let markdown = "```rust\nfn main() { println!(\"Hello, world!\"); }\n```";
+/// let options = default_markdown_options();
+///
+/// // Process the markdown to HTML
+/// let highlighted_html = process_markdown(markdown, &options).unwrap();
+/// println!("{}", highlighted_html);
+/// ```
 fn highlight_code_blocks(html: &str) -> Result<String, MarkdownError> {
     debug!("Highlighting code blocks");
-    let re = regex::Regex::new(
-        r#"(?s)<pre><code class="language-(.*?)">(.*?)</code></pre>"#,
-    )
-    .unwrap();
+
+    lazy_static! {
+        static ref CODE_BLOCK_RE: Regex = Regex::new(
+            r#"(?s)<pre><code class="language-(.*?)">(.*?)</code></pre>"#
+        ).unwrap();
+    }
 
     let mut highlighted_html = String::new();
     let mut last_end = 0;
 
     // Iterate over captured code blocks and apply syntax highlighting
-    for cap in re.captures_iter(html) {
+    for cap in CODE_BLOCK_RE.captures_iter(html) {
         let before = &html[last_end..cap.get(0).unwrap().start()];
         highlighted_html.push_str(before);
 
         let lang = &cap[1];
         let code = html_escape::decode_html_entities(&cap[2]);
 
-        debug!("Highlighting code block with language: {}", lang);
-        let highlighted_code = apply_syntax_highlighting(&code, lang)?;
+        debug!(
+            "Attempting to highlight code block with language: {}",
+            lang
+        );
+        let highlighted_code = apply_syntax_highlighting(&code, lang)
+            .map_err(|e| {
+            MarkdownError::ConversionError(format!(
+                "Failed to highlight code block in language '{}': {}",
+                lang, e
+            ))
+        })?;
+        debug!("Highlighted code: {}", highlighted_code);
 
         highlighted_html.push_str(&format!(
             "<pre><code class=\"language-{}\">{}</code></pre>",
@@ -233,15 +288,7 @@ fn main() {
 <div class="tip">This is a tip.</div>
 "#;
 
-        let options = MarkdownOptions::new()
-            .with_syntax_highlighting(true)
-            .with_custom_blocks(true)
-            .with_enhanced_tables(true)
-            .with_comrak_options({
-                let mut opts = ComrakOptions::default();
-                opts.extension.table = true;
-                opts
-            });
+        let options = default_markdown_options();
 
         let result = process_markdown(markdown, &options);
         assert!(result.is_ok(), "Markdown processing failed");
@@ -419,5 +466,43 @@ fn main() {
         );
         let html = result.unwrap();
         assert!(html.contains(r#"<div class="alert alert-info" role="alert"><strong>Note:</strong>"#), "Custom block not processed correctly");
+    }
+
+    #[test]
+    fn test_apply_syntax_highlighting() {
+        let code = r#"fn main() { println!("Hello, world!"); }"#;
+        let result = apply_syntax_highlighting(code, "rust");
+
+        assert!(result.is_ok(), "Syntax highlighting failed");
+        let highlighted = result.unwrap();
+        assert!(
+            highlighted.contains("<span"),
+            "Highlighted code is missing expected HTML"
+        );
+    }
+
+    /// Test Markdown processing with empty options (all disabled)
+    #[test]
+    fn test_process_markdown_with_no_features_enabled() {
+        let markdown = r#"# Title
+
+    Some plain text. "#;
+        let options = MarkdownOptions::new()
+            .with_syntax_highlighting(false)
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false);
+
+        let result = process_markdown(markdown, &options);
+        assert!(result.is_ok(), "Markdown processing failed");
+
+        let html = result.unwrap();
+        assert!(
+            html.contains("<h1>Title</h1>"),
+            "Heading not processed correctly"
+        );
+        assert!(
+            html.contains("Some plain text."),
+            "Plain text not processed correctly"
+        );
     }
 }

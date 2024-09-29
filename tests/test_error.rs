@@ -62,10 +62,10 @@ mod tests {
         );
     }
 
-    /// Test the MarkdownError::SyntaxHighlightingError variant.
+    /// Test the MarkdownError::SyntaxSetError variant.
     #[test]
-    fn test_markdown_error_syntax_highlighting_error() {
-        let error = MarkdownError::SyntaxHighlightingError(
+    fn test_markdown_error_syntax_set_error() {
+        let error = MarkdownError::SyntaxSetError(
             "Failed to load syntax set".to_string(),
         );
         assert_eq!(

@@ -1,35 +1,47 @@
-# Cargo.toml - Configuration file for the MDX Gen library.
-# Copyright © 2024 MDX Gen. All rights reserved.
-# SPDX-License-Identifier: Apache-2.0 OR MIT
+# -----------------------------------------------------------------------------
+# MDX Gen - A robust Rust library for processing Markdown and converting it to HTML
+# with support for custom blocks, enhanced table formatting, and flexible configuration options.
+# -----------------------------------------------------------------------------
 
 [package]
-# Metadata about the package.
-name = "mdx-gen"                            # The name of the library
-version = "0.0.1"                           # Initial version of the crate
-authors = ["MDX Generator Contributors"]    # Library contributors
-edition = "2021"                            # Rust edition being used
-rust-version = "1.56.0"                     # Minimum supported Rust version
-license = "MIT OR Apache-2.0"               # Dual licensing strategy
+name = "mdx-gen"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.56.0"
+license = "MIT OR Apache-2.0"
 description = """
 A robust Rust library for processing Markdown and converting it to HTML with support for custom blocks, enhanced table formatting, and flexible configuration options.
-"""                                         # Short library description
-homepage = "https://mdxgen.com/"             # Project's homepage URL
-documentation = "https://mdxgen.com/documentation/index.html" # Doc URL
-repository = "https://github.com/sebastienrousseau/mdx-gen"    # Repository URL
-readme = "README.md"                        # Path to the readme file
-build = "build.rs"                          # Path to the build script
+"""
+homepage = "https://mdxgen.com/"
+documentation = "https://mdxgen.com/documentation/index.html"
+repository = "https://github.com/sebastienrousseau/mdx-gen"
+readme = "README.md"
+build = "build.rs"
+
+# -----------------------------------------------------------------------------
+# Crate Configuration
+# -----------------------------------------------------------------------------
 
 categories = [
     "text-processing",
     "html",
     "static-site-generators",
     "parsing",
-    "development-tools",
+    "development-tools"
 ]
 
+keywords = ["markdown", "html", "static-site", "generator", "ssg", "static"]
+
+# Exclude unnecessary files from the crate
+exclude = [
+    "/.git/*", "/.github/*", "/.gitignore", "/.vscode/*"
+]
+
+# -----------------------------------------------------------------------------
+# Dependencies
+# -----------------------------------------------------------------------------
 
 [dependencies]
-# Dependencies required for building and running the project.
 anyhow = "1.0"
 comrak = "0.28"
 env_logger = "0.11"
@@ -39,18 +51,41 @@ log = "0.4"
 regex = "1.11"
 serde = { version = "1.0.202", features = ["derive"] }
 serde_json = "1.0"
-serde_yml = "0.0.12"
-syntect = "5.2"
+serde_yml = { version = "0.0.12", optional = true }
+syntect = { version = "5.2", optional = true }
 thiserror = "1.0"
-toml = "0.8"
+toml = "^0.8"
 
 [build-dependencies]
-# Dependencies for build scripts.
-version_check = "0.9" # Check the Rust version used to compile the package.
+version_check = "0.9"
 
 [lib]
 name = "mdx_gen"
 path = "src/lib.rs"
+
+# -----------------------------------------------------------------------------
+# Features
+# -----------------------------------------------------------------------------
+
+[features]
+# Default feature set includes syntax highlighting, custom blocks, and enhanced tables.
+default = ["syntax_highlighting", "custom_blocks", "enhanced_tables"]
+
+# Enable syntax highlighting using syntect
+syntax_highlighting = ["syntect"]
+
+# Enable custom block processing
+custom_blocks = []
+
+# Enable enhanced table formatting
+enhanced_tables = []
+
+# Enable YAML support
+yaml_support = ["serde_yml"]
+
+# -----------------------------------------------------------------------------
+# Development Dependencies
+# -----------------------------------------------------------------------------
 
 [dev-dependencies]
 tempfile = "3.13"
@@ -61,3 +96,6 @@ criterion = "0.5"
 [[bench]]
 name = "markdown_benchmark"
 harness = false
+
+[profile.bench]
+debug = true
