@@ -421,7 +421,92 @@
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Markdown processing functionality.
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core Markdown processing functionality.
 //!
 //! This module handles the conversion of Markdown content into HTML,
 //! with support for custom blocks, enhanced tables, and syntax highlighting.
@@ -432,7 +517,9 @@
     apply_syntax_highlighting, process_custom_blocks, process_tables,
 };
 <span class="kw">use </span>comrak::{markdown_to_html, ComrakOptions};
+<span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>log::{debug, info, warn};
+<span class="kw">use </span>regex::Regex;
 
 <span class="doccomment">/// Options for configuring Markdown processing behavior.
 </span><span class="attr">#[derive(Debug, Clone)]
@@ -445,18 +532,21 @@
     </span><span class="kw">pub </span>enable_syntax_highlighting: bool,
     <span class="doccomment">/// Enable or disable enhanced table formatting.
     </span><span class="kw">pub </span>enable_enhanced_tables: bool,
+    <span class="doccomment">/// Optional custom theme for syntax highlighting.
+    </span><span class="kw">pub </span>syntax_theme: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Default <span class="kw">for </span>MarkdownOptions&lt;<span class="lifetime">'a</span>&gt; {
     <span class="doccomment">/// Provides default options where custom blocks, syntax highlighting,
-    /// and enhanced tables are all enabled.
+    /// and enhanced tables are all enabled, with default theme.
     </span><span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             comrak_options: ComrakOptions::default(),
             enable_custom_blocks: <span class="bool-val">true</span>,
             enable_syntax_highlighting: <span class="bool-val">true</span>,
             enable_enhanced_tables: <span class="bool-val">true</span>,
-        }
+            syntax_theme: <span class="prelude-val">None</span>, <span class="comment">// Default: no custom theme
+        </span>}
     }
 }
 
@@ -467,50 +557,30 @@
     }
 
     <span class="doccomment">/// Enables or disables custom blocks.
-    ///
-    /// # Example
-    /// ```
-    /// use mdx_gen::MarkdownOptions;
-    /// let options = MarkdownOptions::new().with_custom_blocks(true);
-    /// ```
     </span><span class="kw">pub fn </span>with_custom_blocks(<span class="kw-2">mut </span><span class="self">self</span>, enable: bool) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.enable_custom_blocks = enable;
         <span class="self">self
     </span>}
 
     <span class="doccomment">/// Enables or disables syntax highlighting for code blocks.
-    ///
-    /// # Example
-    /// ```
-    /// use mdx_gen::MarkdownOptions;
-    /// let options = MarkdownOptions::new().with_syntax_highlighting(false);
-    /// ```
     </span><span class="kw">pub fn </span>with_syntax_highlighting(<span class="kw-2">mut </span><span class="self">self</span>, enable: bool) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.enable_syntax_highlighting = enable;
         <span class="self">self
     </span>}
 
     <span class="doccomment">/// Enables or disables enhanced table formatting.
-    ///
-    /// # Example
-    /// ```
-    /// use mdx_gen::MarkdownOptions;
-    /// let options = MarkdownOptions::new().with_enhanced_tables(true);
-    /// ```
     </span><span class="kw">pub fn </span>with_enhanced_tables(<span class="kw-2">mut </span><span class="self">self</span>, enable: bool) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.enable_enhanced_tables = enable;
         <span class="self">self
     </span>}
 
+    <span class="doccomment">/// Sets a custom theme for syntax highlighting.
+    </span><span class="kw">pub fn </span>with_custom_theme(<span class="kw-2">mut </span><span class="self">self</span>, theme: String) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.syntax_theme = <span class="prelude-val">Some</span>(theme);
+        <span class="self">self
+    </span>}
+
     <span class="doccomment">/// Sets custom Comrak options.
-    ///
-    /// # Example
-    /// ```
-    /// use comrak::ComrakOptions;
-    /// use mdx_gen::MarkdownOptions;
-    /// let custom_comrak_options = ComrakOptions::default();
-    /// let options = MarkdownOptions::new().with_comrak_options(custom_comrak_options);
-    /// ```
     </span><span class="kw">pub fn </span>with_comrak_options(
         <span class="kw-2">mut </span><span class="self">self</span>,
         options: ComrakOptions&lt;<span class="lifetime">'a</span>&gt;,
@@ -520,9 +590,6 @@
     </span>}
 
     <span class="doccomment">/// Validates the `MarkdownOptions` to ensure they are consistent and compatible.
-    ///
-    /// # Returns
-    /// A `Result` indicating whether the options are valid, with an error message if not.
     </span><span class="kw">pub fn </span>validate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
         <span class="kw">if </span><span class="self">self</span>.enable_enhanced_tables
             &amp;&amp; !<span class="self">self</span>.comrak_options.extension.table
@@ -533,16 +600,61 @@
     }
 }
 
+<span class="doccomment">/// Creates a new instance of `MarkdownOptions` with default values.
+///
+/// # Purpose
+///
+/// This function initializes a `MarkdownOptions` struct with default settings for processing Markdown content.
+///
+/// # Parameters
+///
+/// This function does not take any parameters.
+///
+/// # Return
+///
+/// Returns a `MarkdownOptions` instance with the following default settings:
+/// - Custom blocks are enabled.
+/// - Syntax highlighting is enabled.
+/// - Enhanced table formatting is enabled.
+/// - The Comrak Markdown parser's table extension is enabled.
+///
+</span><span class="kw">pub fn </span>default_markdown_options() -&gt; MarkdownOptions&lt;<span class="lifetime">'static</span>&gt; {
+    MarkdownOptions::new()
+        .with_custom_blocks(<span class="bool-val">true</span>)
+        .with_syntax_highlighting(<span class="bool-val">true</span>)
+        .with_enhanced_tables(<span class="bool-val">true</span>)
+        .with_comrak_options({
+            <span class="kw">let </span><span class="kw-2">mut </span>opts = ComrakOptions::default();
+            opts.extension.table = <span class="bool-val">true</span>;
+            opts
+        })
+}
+
 <span class="doccomment">/// Processes the input Markdown content and converts it into HTML.
 /// Applies custom blocks, syntax highlighting, and enhanced tables based on the provided options.
 ///
 /// # Arguments
-/// * `content` - The input Markdown content as a string slice.
-/// * `options` - Configuration options to enable or disable specific features.
+///
+/// * `content` - The input Markdown string to be processed.
+/// * `options` - The configuration options for Markdown processing.
 ///
 /// # Returns
-/// A `Result` containing the processed HTML string, or a `MarkdownError` if processing fails.
 ///
+/// A result containing the generated HTML string or an error if processing fails.
+///
+/// # Example
+///
+/// ```
+/// use mdx_gen::MarkdownOptions;
+/// use mdx_gen::process_markdown;
+/// use mdx_gen::ComrakOptions;
+/// use mdx_gen::markdown::default_markdown_options;
+///
+/// let markdown = "# Title\n\nSome text.";
+/// let options = default_markdown_options();
+/// let html = process_markdown(markdown, &amp;options).unwrap();
+/// println!("{}", html);
+/// ```
 </span><span class="kw">pub fn </span>process_markdown(
     content: <span class="kw-2">&amp;</span>str,
     options: <span class="kw-2">&amp;</span>MarkdownOptions,
@@ -587,34 +699,62 @@
 }
 
 <span class="doccomment">/// Highlights code blocks in the generated HTML using the specified syntax highlighter.
-/// This function searches for code blocks marked with a language and applies the appropriate
-/// syntax highlighting.
 ///
 /// # Arguments
-/// * `html` - The input HTML containing code blocks.
+///
+/// * `html` - The input HTML string that contains code blocks.
+/// * `options` - The configuration options, including the theme for syntax highlighting.
 ///
 /// # Returns
-/// A `Result` containing the HTML with highlighted code blocks, or a `MarkdownError` if highlighting fails.
+///
+/// A result containing the HTML with highlighted code or an error if highlighting fails.
+///
+/// # Example
+///
+/// ```
+/// use mdx_gen::ComrakOptions;
+/// use mdx_gen::{MarkdownOptions, process_markdown};
+/// use mdx_gen::markdown::default_markdown_options;
+///
+/// let markdown = "```rust\nfn main() { println!(\"Hello, world!\"); }\n```";
+/// let options = default_markdown_options();
+///
+/// // Process the markdown to HTML
+/// let highlighted_html = process_markdown(markdown, &amp;options).unwrap();
+/// println!("{}", highlighted_html);
+/// ```
 </span><span class="kw">fn </span>highlight_code_blocks(html: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String, MarkdownError&gt; {
     <span class="macro">debug!</span>(<span class="string">"Highlighting code blocks"</span>);
-    <span class="kw">let </span>re = regex::Regex::new(
-        <span class="string">r#"(?s)&lt;pre&gt;&lt;code class="language-(.*?)"&gt;(.*?)&lt;/code&gt;&lt;/pre&gt;"#</span>,
-    )
-    .unwrap();
+
+    <span class="macro">lazy_static!</span> {
+        <span class="kw">static </span><span class="kw-2">ref </span>CODE_BLOCK_RE: Regex = Regex::new(
+            <span class="string">r#"(?s)&lt;pre&gt;&lt;code class="language-(.*?)"&gt;(.*?)&lt;/code&gt;&lt;/pre&gt;"#
+        </span>).unwrap();
+    }
 
     <span class="kw">let </span><span class="kw-2">mut </span>highlighted_html = String::new();
     <span class="kw">let </span><span class="kw-2">mut </span>last_end = <span class="number">0</span>;
 
     <span class="comment">// Iterate over captured code blocks and apply syntax highlighting
-    </span><span class="kw">for </span>cap <span class="kw">in </span>re.captures_iter(html) {
+    </span><span class="kw">for </span>cap <span class="kw">in </span>CODE_BLOCK_RE.captures_iter(html) {
         <span class="kw">let </span>before = <span class="kw-2">&amp;</span>html[last_end..cap.get(<span class="number">0</span>).unwrap().start()];
         highlighted_html.push_str(before);
 
         <span class="kw">let </span>lang = <span class="kw-2">&amp;</span>cap[<span class="number">1</span>];
         <span class="kw">let </span>code = html_escape::decode_html_entities(<span class="kw-2">&amp;</span>cap[<span class="number">2</span>]);
 
-        <span class="macro">debug!</span>(<span class="string">"Highlighting code block with language: {}"</span>, lang);
-        <span class="kw">let </span>highlighted_code = apply_syntax_highlighting(<span class="kw-2">&amp;</span>code, lang)<span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(
+            <span class="string">"Attempting to highlight code block with language: {}"</span>,
+            lang
+        );
+        <span class="kw">let </span>highlighted_code = apply_syntax_highlighting(<span class="kw-2">&amp;</span>code, lang)
+            .map_err(|e| {
+            MarkdownError::ConversionError(<span class="macro">format!</span>(
+                <span class="string">"Failed to highlight code block in language '{}': {}"</span>,
+                lang, e
+            ))
+        })<span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(<span class="string">"Highlighted code: {}"</span>, highlighted_code);
 
         highlighted_html.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
             <span class="string">"&lt;pre&gt;&lt;code class=\"language-{}\"&gt;{}&lt;/code&gt;&lt;/pre&gt;"</span>,
@@ -656,15 +796,7 @@ fn main() {
 &lt;div class="tip"&gt;This is a tip.&lt;/div&gt;
 "#</span>;
 
-        <span class="kw">let </span>options = MarkdownOptions::new()
-            .with_syntax_highlighting(<span class="bool-val">true</span>)
-            .with_custom_blocks(<span class="bool-val">true</span>)
-            .with_enhanced_tables(<span class="bool-val">true</span>)
-            .with_comrak_options({
-                <span class="kw">let </span><span class="kw-2">mut </span>opts = ComrakOptions::default();
-                opts.extension.table = <span class="bool-val">true</span>;
-                opts
-            });
+        <span class="kw">let </span>options = default_markdown_options();
 
         <span class="kw">let </span>result = process_markdown(markdown, <span class="kw-2">&amp;</span>options);
         <span class="macro">assert!</span>(result.is_ok(), <span class="string">"Markdown processing failed"</span>);
@@ -842,6 +974,44 @@ fn main() {
         );
         <span class="kw">let </span>html = result.unwrap();
         <span class="macro">assert!</span>(html.contains(<span class="string">r#"&lt;div class="alert alert-info" role="alert"&gt;&lt;strong&gt;Note:&lt;/strong&gt;"#</span>), <span class="string">"Custom block not processed correctly"</span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_apply_syntax_highlighting() {
+        <span class="kw">let </span>code = <span class="string">r#"fn main() { println!("Hello, world!"); }"#</span>;
+        <span class="kw">let </span>result = apply_syntax_highlighting(code, <span class="string">"rust"</span>);
+
+        <span class="macro">assert!</span>(result.is_ok(), <span class="string">"Syntax highlighting failed"</span>);
+        <span class="kw">let </span>highlighted = result.unwrap();
+        <span class="macro">assert!</span>(
+            highlighted.contains(<span class="string">"&lt;span"</span>),
+            <span class="string">"Highlighted code is missing expected HTML"
+        </span>);
+    }
+
+    <span class="doccomment">/// Test Markdown processing with empty options (all disabled)
+    </span><span class="attr">#[test]
+    </span><span class="kw">fn </span>test_process_markdown_with_no_features_enabled() {
+        <span class="kw">let </span>markdown = <span class="string">r#"# Title
+
+    Some plain text. "#</span>;
+        <span class="kw">let </span>options = MarkdownOptions::new()
+            .with_syntax_highlighting(<span class="bool-val">false</span>)
+            .with_custom_blocks(<span class="bool-val">false</span>)
+            .with_enhanced_tables(<span class="bool-val">false</span>);
+
+        <span class="kw">let </span>result = process_markdown(markdown, <span class="kw-2">&amp;</span>options);
+        <span class="macro">assert!</span>(result.is_ok(), <span class="string">"Markdown processing failed"</span>);
+
+        <span class="kw">let </span>html = result.unwrap();
+        <span class="macro">assert!</span>(
+            html.contains(<span class="string">"&lt;h1&gt;Title&lt;/h1&gt;"</span>),
+            <span class="string">"Heading not processed correctly"
+        </span>);
+        <span class="macro">assert!</span>(
+            html.contains(<span class="string">"Some plain text."</span>),
+            <span class="string">"Plain text not processed correctly"
+        </span>);
     }
 }
 </code></pre></div></section></main></body></html>

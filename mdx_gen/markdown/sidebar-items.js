@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["process_markdown"],"struct":["MarkdownOptions"]};
+window.SIDEBAR_ITEMS = {"fn":["default_markdown_options","process_markdown"],"struct":["MarkdownOptions"]};
