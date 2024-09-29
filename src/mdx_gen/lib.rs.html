@@ -104,7 +104,12 @@
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a></pre></div><pre class="rust"><code><span class="comment">// src/lib.rs
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a></pre></div><pre class="rust"><code><span class="comment">// src/lib.rs
 
 </span><span class="doccomment">//! # MDX Generator (mdx-gen)
 //!
@@ -154,7 +159,8 @@
 //! use mdx_gen::{process_markdown, MarkdownOptions};
 //!
 //! let markdown_content = "# Hello, world!\n\nThis is a paragraph.";
-//! let options = MarkdownOptions::new();
+//! let options = MarkdownOptions::new()
+//!     .with_enhanced_tables(false);
 //! let html = process_markdown(markdown_content, &amp;options).unwrap();
 //! println!("HTML output: {}", html);
 //! ```
@@ -173,16 +179,20 @@
 //! fn main() {
 //!     println!("Hello, world!");
 //! }
-//!
 //! "#;
 //!
 //! let options = MarkdownOptions::new()
 //!     .with_custom_blocks(true)
-//!     .with_syntax_highlighting(true);
+//!     .with_syntax_highlighting(true)
+//!     .with_enhanced_tables(true)
+//!     .with_comrak_options({
+//!         let mut opts = comrak::ComrakOptions::default();
+//!         opts.extension.table = true;
+//!         opts
+//!     });
 //!
 //! let html = process_markdown(markdown_content, &amp;options).unwrap();
 //! println!("HTML output: {}", html);
-//!
 //! ```
 
 </span><span class="attr">#![doc(
