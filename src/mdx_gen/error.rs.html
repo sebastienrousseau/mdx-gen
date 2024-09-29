@@ -83,9 +83,9 @@
 
 <span class="doccomment">/// A helper function that adds context to errors occurring during Markdown processing.
 </span><span class="kw">pub fn </span>parse_markdown_with_context(input: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-    <span class="comment">// Example of adding context using anyhow
+    <span class="comment">// Add context without overriding the original error message
     </span><span class="kw">let </span>parsed_content = some_markdown_parsing_function(input)
-        .context(<span class="string">"Failed while parsing markdown content"</span>)<span class="question-mark">?</span>;
+        .with_context(|| <span class="string">"Failed while parsing markdown content"</span>)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(parsed_content)
 }

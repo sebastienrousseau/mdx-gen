@@ -270,7 +270,7 @@
 
 <span class="kw">impl </span>CustomBlockType {
     <span class="doccomment">/// Returns the appropriate Bootstrap alert class for the custom block type.
-    </span><span class="kw">fn </span>get_alert_class(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+    </span><span class="kw">pub fn </span>get_alert_class(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
         <span class="kw">match </span><span class="self">self </span>{
             CustomBlockType::Note =&gt; <span class="string">"alert-info"</span>,
             CustomBlockType::Warning =&gt; <span class="string">"alert-warning"</span>,
@@ -282,7 +282,7 @@
     }
 
     <span class="doccomment">/// Returns the title for the custom block type.
-    </span><span class="kw">fn </span>get_title(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+    </span><span class="kw">pub fn </span>get_title(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
         <span class="kw">match </span><span class="self">self </span>{
             CustomBlockType::Note =&gt; <span class="string">"Note"</span>,
             CustomBlockType::Warning =&gt; <span class="string">"Warning"</span>,
