@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE-APACHE.md and LICENSE-MIT.md in the repository root for full license information.
 
-//! # MDX Gen (rss-gen)
+//! # MDX Gen
 //!
-//! This file serves as an entry point for running all the RSS Gen (rss-gen) examples, demonstrating logging levels, formats, macros, and library functionality.
+//! This file serves as an entry point for running all the MDX Gen examples, demonstrating logging levels, formats, macros, and library functionality.
 
 #![allow(missing_docs)]
 
