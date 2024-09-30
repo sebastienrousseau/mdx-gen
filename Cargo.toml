@@ -30,7 +30,7 @@ categories = [
     "development-tools"
 ]
 
-keywords = ["markdown", "html", "static-site", "generator", "ssg", "static"]
+keywords = ["markdown", "html", "generator", "mdx-gen", "static"]
 
 # Exclude unnecessary files from the crate
 exclude = [
