@@ -23,9 +23,9 @@ build = "build.rs"
 # -----------------------------------------------------------------------------
 
 categories = [
+    "command-line-utilities",
+    "data-structures",
     "text-processing",
-    "html",
-    "static-site-generators",
     "parsing",
     "development-tools"
 ]
