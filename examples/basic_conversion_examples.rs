@@ -14,7 +14,7 @@
 //! - **Basic Markdown Conversion**: Simple conversion of text with basic Markdown formatting like bold and italics.
 //! - **Custom Extensions**: Enabling of common Markdown extensions such as strikethrough, tables, and autolinking.
 
-use comrak::ComrakOptions;
+use comrak::Options;
 use mdx_gen::{process_markdown, MarkdownOptions};
 
 /// Entry point for the basic Markdown to HTML conversion example.
@@ -46,7 +46,7 @@ Check out [our website](https://example.com) for more information.
     "#;
 
     // Initialize MarkdownOptions with default Comrak options
-    let mut comrak_options = ComrakOptions::default();
+    let mut comrak_options = Options::default();
     comrak_options.extension.strikethrough = true; // Enable strikethrough
     comrak_options.extension.table = true; // Enable tables
     comrak_options.extension.autolink = true; // Enable automatic links

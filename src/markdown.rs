@@ -7,7 +7,7 @@ use crate::error::MarkdownError;
 use crate::extensions::{
     apply_syntax_highlighting, process_custom_blocks, process_tables,
 };
-use comrak::{markdown_to_html, ComrakOptions};
+use comrak::{markdown_to_html, Options};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use regex::Regex;
@@ -17,7 +17,7 @@ use std::fmt;
 #[derive(Clone)]
 pub struct MarkdownOptions<'a> {
     /// Options for the underlying Comrak Markdown parser.
-    pub comrak_options: ComrakOptions<'a>,
+    pub comrak_options: Options<'a>,
     /// Enable or disable processing of custom blocks (e.g., note, warning, tip).
     pub enable_custom_blocks: bool,
     /// Enable or disable syntax highlighting for code blocks.
@@ -33,7 +33,7 @@ impl<'a> Default for MarkdownOptions<'a> {
     /// and enhanced tables are all enabled, with default theme.
     fn default() -> Self {
         Self {
-            comrak_options: ComrakOptions::default(),
+            comrak_options: Options::default(),
             enable_custom_blocks: true,
             enable_syntax_highlighting: true,
             enable_enhanced_tables: true,
@@ -75,7 +75,7 @@ impl<'a> MarkdownOptions<'a> {
     /// Sets custom Comrak options.
     pub fn with_comrak_options(
         mut self,
-        options: ComrakOptions<'a>,
+        options: Options<'a>,
     ) -> Self {
         self.comrak_options = options;
         self
@@ -116,7 +116,7 @@ pub fn default_markdown_options() -> MarkdownOptions<'static> {
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts
         })
@@ -139,7 +139,7 @@ pub fn process_markdown(
 
     // Clone Comrak options and enable unsafe rendering
     let mut comrak_opts = options.comrak_options.clone();
-    comrak_opts.render.unsafe_ = true;
+    comrak_opts.render.r#unsafe = true;
 
     // Convert Markdown to initial HTML
     debug!("Converting markdown to HTML using Comrak");
@@ -295,7 +295,7 @@ fn main() {
         let options = MarkdownOptions::new()
             .with_custom_blocks(false)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true; // Enable table extension if you have tables
                 opts
             });
@@ -326,7 +326,7 @@ fn main() {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(false)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true;
                 opts
             });
@@ -352,7 +352,7 @@ fn main() {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(true)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = false;
                 opts
             });
@@ -362,7 +362,7 @@ fn main() {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(true)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true;
                 opts
             });
@@ -391,7 +391,7 @@ fn main() {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(true)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = false;
                 opts
             });
@@ -409,7 +409,7 @@ fn main() {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(false) // No need for enhanced tables in an empty document
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = false; // Disable table extension
                 opts
             });
@@ -430,7 +430,7 @@ fn main() {
             .with_custom_blocks(true)
             .with_enhanced_tables(false) // Disable enhanced tables since they're not used here
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = false; // Ensure table extension is disabled
                 opts
             });

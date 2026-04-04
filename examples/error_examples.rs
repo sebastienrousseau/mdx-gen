@@ -11,7 +11,7 @@
 
 #![allow(missing_docs)]
 
-use comrak::ComrakOptions;
+use comrak::Options;
 use mdx_gen::{process_markdown, MarkdownError, MarkdownOptions};
 
 /// Entry point for the MDX Gen error handling examples.
@@ -194,7 +194,7 @@ fn invalid_options_error_example(
 
     // Demonstrate invalid options scenario
     let markdown = "| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |";
-    let mut comrak_options = ComrakOptions::default();
+    let mut comrak_options = Options::default();
     comrak_options.extension.table = false;
     let options = MarkdownOptions::new()
         .with_enhanced_tables(true)

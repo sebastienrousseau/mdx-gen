@@ -6,7 +6,7 @@ fn test_basic_markdown_conversion() {
     let options = MarkdownOptions::new()
         .with_enhanced_tables(false) // Disable enhanced tables for this test
         .with_comrak_options({
-            let mut opts = comrak::ComrakOptions::default();
+            let mut opts = comrak::Options::default();
             opts.extension.table = false; // Ensure the table extension is disabled
             opts
         });
@@ -21,7 +21,7 @@ fn test_markdown_with_extensions() {
     let options = MarkdownOptions::new()
         .with_enhanced_tables(false) // Disable enhanced tables for this test
         .with_comrak_options({
-            let mut opts = comrak::ComrakOptions::default();
+            let mut opts = comrak::Options::default();
             opts.extension.strikethrough = true; // Enable strikethrough
             opts.extension.table = false; // Disable the table extension
             opts
@@ -40,7 +40,7 @@ fn test_markdown_with_links() {
     let options = MarkdownOptions::new()
         .with_enhanced_tables(false) // Disable enhanced tables for this test
         .with_comrak_options({
-            let mut opts = comrak::ComrakOptions::default();
+            let mut opts = comrak::Options::default();
             opts.extension.table = false; // Disable the table extension
             opts
         });

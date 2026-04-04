@@ -45,10 +45,10 @@ pub use extensions::CustomBlockType;
 /// # Example
 /// ```
 /// use mdx_gen::{process_markdown, MarkdownOptions};
-/// use comrak::ComrakOptions;
+/// use comrak::Options;
 ///
 /// let markdown_input = "# Hello, World!";
-/// let mut comrak_options = ComrakOptions::default();
+/// let mut comrak_options = Options::default();
 /// comrak_options.extension.table = true;  // Enable Comrak table extension
 ///
 /// let options = MarkdownOptions::default().with_comrak_options(comrak_options);  // Chaining method call
@@ -69,9 +69,9 @@ pub use markdown::MarkdownOptions;
 ///
 /// # Usage
 /// ```
-/// use mdx_gen::ComrakOptions;
+/// use mdx_gen::Options;
 ///
-/// let mut options = ComrakOptions::default();
+/// let mut options = Options::default();
 /// options.extension.strikethrough = true;
 /// ```
-pub use comrak::ComrakOptions;
+pub use comrak::Options;

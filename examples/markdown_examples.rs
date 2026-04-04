@@ -11,7 +11,7 @@
 
 #![allow(missing_docs)]
 
-use mdx_gen::{process_markdown, ComrakOptions, MarkdownOptions};
+use mdx_gen::{process_markdown, Options, MarkdownOptions};
 
 /// Entry point for the MDX Gen Markdown processing examples.
 ///
@@ -55,7 +55,7 @@ fn basic_markdown_conversion() -> Result<(), Box<dyn std::error::Error>>
     let options = MarkdownOptions::new()
         .with_enhanced_tables(true) // Use enhanced tables
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true; // Enable table extension if you have tables
             opts
         });
@@ -89,7 +89,7 @@ fn custom_options_example() -> Result<(), Box<dyn std::error::Error>> {
         .with_custom_blocks(false)
         .with_syntax_highlighting(false)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true; // Enable table extension if you have tables
             opts
         });
@@ -126,7 +126,7 @@ fn main() {
     let options = MarkdownOptions::new()
         .with_syntax_highlighting(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true; // Enable table extension if you have tables
             opts
         });
@@ -161,7 +161,7 @@ fn custom_blocks_example() -> Result<(), Box<dyn std::error::Error>> {
     let options = MarkdownOptions::new()
         .with_custom_blocks(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true; // Enable table extension if you have tables
             opts
         });
@@ -193,7 +193,7 @@ fn enhanced_tables_example() -> Result<(), Box<dyn std::error::Error>> {
 |:---------|:--------:|---------:|
 | Left     | Center   | Right    |
 "#;
-    let mut comrak_options = ComrakOptions::default();
+    let mut comrak_options = Options::default();
     comrak_options.extension.table = true;
     let options = MarkdownOptions::new()
         .with_enhanced_tables(true)
@@ -236,7 +236,7 @@ def greet(name):
 | Syntax  | ✅     |
 | Blocks  | ✅     |
 "#;
-    let mut comrak_options = ComrakOptions::default();
+    let mut comrak_options = Options::default();
     comrak_options.extension.table = true;
     comrak_options.extension.strikethrough = true;
     comrak_options.extension.tasklist = true;

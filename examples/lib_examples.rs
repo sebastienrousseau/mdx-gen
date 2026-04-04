@@ -6,7 +6,7 @@
 
 use mdx_gen::extensions::CustomBlockType;
 use mdx_gen::{
-    apply_syntax_highlighting, process_markdown, ComrakOptions,
+    apply_syntax_highlighting, process_markdown, Options,
     MarkdownOptions,
 };
 
@@ -17,10 +17,10 @@ use mdx_gen::{
 ///
 /// # Example
 /// ```
-/// use mdx_gen::{process_markdown, MarkdownOptions, ComrakOptions};
+/// use mdx_gen::{process_markdown, MarkdownOptions, Options};
 ///
 /// let markdown_input = "# Hello, World!\n\nThis is an **example**.";
-/// let mut comrak_options = ComrakOptions::default();
+/// let mut comrak_options = Options::default();
 /// comrak_options.extension.strikethrough = true; // Enable strikethrough
 ///
 /// let options = MarkdownOptions::default().with_comrak_options(comrak_options);
@@ -37,7 +37,7 @@ pub fn example_basic_markdown_conversion(
     let markdown_input =
         "# Welcome to MDX Gen\n\nThis is a **bold** statement.";
 
-    let mut comrak_options = ComrakOptions::default();
+    let mut comrak_options = Options::default();
     comrak_options.extension.strikethrough = true; // Enable strikethrough
 
     let options =
@@ -140,7 +140,7 @@ pub fn example_enhanced_tables(
     | Left     | Center   | Right    |
     "#;
 
-    let mut comrak_options = ComrakOptions::default();
+    let mut comrak_options = Options::default();
     comrak_options.extension.table = true; // Enable table support
 
     let options =

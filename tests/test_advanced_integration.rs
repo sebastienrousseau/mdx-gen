@@ -1,4 +1,4 @@
-use comrak::ComrakOptions;
+use comrak::Options;
 use mdx_gen::{process_markdown, MarkdownOptions};
 
 #[test]
@@ -53,7 +53,7 @@ Here's a paragraph with **bold** and *italic* text, followed by a list:
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;
@@ -119,7 +119,7 @@ Another paragraph.
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;
@@ -158,7 +158,7 @@ fn test_links_and_images() {
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;
@@ -198,7 +198,7 @@ fn test_lists_and_blockquotes() {
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;
@@ -236,7 +236,7 @@ Another line followed by an HR.
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;
@@ -272,7 +272,7 @@ fn test_strikethrough_and_tasklist() {
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;
@@ -318,7 +318,7 @@ Here is a URL: https://www.example.com
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;
@@ -352,7 +352,7 @@ fn test_nested_blockquotes() {
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;
@@ -384,7 +384,7 @@ fn test_emphasis_in_block_elements() {
         .with_syntax_highlighting(true)
         .with_enhanced_tables(true)
         .with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true;
             opts.extension.strikethrough = true;
             opts.extension.tasklist = true;

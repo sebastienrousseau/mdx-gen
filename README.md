@@ -90,7 +90,7 @@ let options = MarkdownOptions::new()
     .with_syntax_highlighting(true)
     .with_enhanced_tables(true)
     .with_comrak_options({
-        let mut opts = comrak::ComrakOptions::default();
+        let mut opts = comrak::Options::default();
         opts.extension.table = true;
         opts
     });

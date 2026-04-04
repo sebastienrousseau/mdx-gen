@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use comrak::ComrakOptions;
+    use comrak::Options;
     use mdx_gen::{process_markdown, MarkdownOptions};
 
     #[test]
@@ -26,7 +26,7 @@ mod tests {
     fn test_process_markdown_with_default_options() {
         let markdown = "# Heading\n\nThis is a **bold** text.";
         let options = MarkdownOptions::new().with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true; // Enable table extension
             opts
         });
@@ -42,7 +42,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(true)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true; // Ensure the Comrak table extension is enabled
                 opts
             });
@@ -74,7 +74,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_syntax_highlighting(true)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true; // Ensure the table extension is enabled to avoid conflicts
                 opts
             });
@@ -102,7 +102,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(false) // Disable enhanced tables
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = false;
                 opts
             });
@@ -125,7 +125,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(false) // Disable enhanced tables
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = false;
                 opts
             });
@@ -141,7 +141,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(false) // No need for enhanced tables in an empty document
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = false; // Disable table extension
                 opts
             });
@@ -162,7 +162,7 @@ mod tests {
             .with_custom_blocks(true)
             .with_enhanced_tables(false) // Disable enhanced tables since they're not used here
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = false; // Ensure table extension is disabled
                 opts
             });
@@ -188,7 +188,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_custom_blocks(false)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true;
                 opts
             });
@@ -209,7 +209,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_syntax_highlighting(false)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true; // Enable table extension for enhanced tables
                 opts
             });
@@ -230,7 +230,7 @@ mod tests {
         // Simulate a potential failure by passing an invalid string (e.g., too large, invalid encoding)
         let markdown = "\u{FFFD}".repeat(100_000); // Simulating a large string with potential encoding issues
         let options = MarkdownOptions::new().with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = false;
             opts
         });

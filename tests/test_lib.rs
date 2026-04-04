@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use comrak::ComrakOptions;
+    use comrak::Options;
     use mdx_gen::{process_markdown, MarkdownError, MarkdownOptions};
 
     #[test]
@@ -18,7 +18,7 @@ mod tests {
     fn test_process_markdown_with_default_options() {
         let markdown = "# Heading\n\nThis is a **bold** text.";
         let options = MarkdownOptions::new().with_comrak_options({
-            let mut opts = ComrakOptions::default();
+            let mut opts = Options::default();
             opts.extension.table = true; // Ensure table extension is disabled for default test
             opts
         });
@@ -40,7 +40,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_custom_blocks(true)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true;
                 opts
             });
@@ -55,7 +55,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_syntax_highlighting(true)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true; // Ensure table extension is enabled to avoid conflicts
                 opts
             });
@@ -86,7 +86,7 @@ mod tests {
         let options = MarkdownOptions::new()
             .with_enhanced_tables(true)
             .with_comrak_options({
-                let mut opts = ComrakOptions::default();
+                let mut opts = Options::default();
                 opts.extension.table = true; // Enable table extension
                 opts
             });
