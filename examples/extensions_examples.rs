@@ -10,9 +10,10 @@
 
 #![allow(missing_docs)]
 
+use mdx_gen::apply_syntax_highlighting;
 use mdx_gen::extensions::{
-    apply_syntax_highlighting, process_custom_blocks, process_tables,
-    ColumnAlignment, CustomBlockType,
+    process_custom_blocks, process_tables, ColumnAlignment,
+    CustomBlockType,
 };
 
 /// Entry point for the MDX Gen extensions examples.
@@ -23,8 +24,7 @@ use mdx_gen::extensions::{
 /// # Errors
 ///
 /// Returns an error if any of the example functions fail.
-#[tokio::main]
-pub(crate) async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🧪 MDX Gen Extensions Examples\n");
 
     syntax_highlighting_example()?;

@@ -105,7 +105,8 @@ mod tests {
                 let mut opts = Options::default();
                 opts.extension.table = false;
                 opts
-            });
+            })
+            .with_unsafe_html(true);
         let result = process_markdown(markdown, &options);
         assert!(result.is_ok(), "Processing Markdown with HTML tags should not result in an error. Error: {:?}", result.err());
         let html = result.unwrap();
@@ -165,7 +166,8 @@ mod tests {
                 let mut opts = Options::default();
                 opts.extension.table = false; // Ensure table extension is disabled
                 opts
-            });
+            })
+            .with_unsafe_html(true);
 
         let result = process_markdown(markdown, &options);
         assert!(

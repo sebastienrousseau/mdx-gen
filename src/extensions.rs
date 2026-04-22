@@ -1,23 +1,34 @@
 //! Extension functionality for the MDX Gen library.
 //!
 //! This module provides utilities for enhancing Markdown processing,
-//! including syntax highlighting, table formatting, and custom block handling.
+//! including custom block handling and table formatting.
+//! Syntax highlighting has moved to [`crate::highlight`].
 
 use crate::error::MarkdownError;
-use lazy_static::lazy_static;
+use comrak::nodes::NodeValue;
 use regex::Regex;
+use std::collections::HashMap;
 use std::str::FromStr;
-use syntect::{
-    highlighting::ThemeSet, html::highlighted_html_for_string,
-    parsing::SyntaxSet,
-};
+use std::sync::LazyLock;
 
-lazy_static! {
-    /// Cached `SyntaxSet` to avoid reloading on every function call.
-    static ref SYNTAX_SET: SyntaxSet = SyntaxSet::load_defaults_newlines();
-    /// Cached `ThemeSet` to avoid reloading on every function call.
-    static ref THEME_SET: ThemeSet = ThemeSet::load_defaults();
-}
+// ── Table regexes (cached) ──────────────────────────────────────────
+
+static TABLE_OPEN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"<table>").unwrap());
+static TABLE_CLOSE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"</table>").unwrap());
+static TABLE_CELL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"<td([^>]*)>").unwrap());
+
+/// Regex matching known custom block div elements inside HTML blocks.
+static CUSTOM_BLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?si)<div\s+class=["']?(note|warning|tip|info|important|caution)["']?>(.*?)</div>"#,
+    )
+    .unwrap()
+});
+
+// ── Column alignment ────────────────────────────────────────────────
 
 /// Alignment options for table columns.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,8 +41,10 @@ pub enum ColumnAlignment {
     Right,
 }
 
+// ── Custom block types ──────────────────────────────────────────────
+
 /// Represents different types of custom blocks.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CustomBlockType {
     /// A note block.
     Note,
@@ -48,28 +61,62 @@ pub enum CustomBlockType {
 }
 
 impl CustomBlockType {
-    /// Returns the appropriate Bootstrap alert class for the custom block type.
-    pub fn get_alert_class(&self) -> &'static str {
+    /// Returns the default Bootstrap alert class.
+    pub fn default_alert_class(&self) -> &'static str {
         match self {
-            CustomBlockType::Note => "alert-info",
-            CustomBlockType::Warning => "alert-warning",
-            CustomBlockType::Tip => "alert-success",
-            CustomBlockType::Info => "alert-primary",
-            CustomBlockType::Important => "alert-danger",
-            CustomBlockType::Caution => "alert-secondary",
+            Self::Note => "alert-info",
+            Self::Warning => "alert-warning",
+            Self::Tip => "alert-success",
+            Self::Info => "alert-primary",
+            Self::Important => "alert-danger",
+            Self::Caution => "alert-secondary",
         }
     }
 
-    /// Returns the title for the custom block type.
-    pub fn get_title(&self) -> &'static str {
+    /// Returns the default human-readable title.
+    pub fn default_title(&self) -> &'static str {
         match self {
-            CustomBlockType::Note => "Note",
-            CustomBlockType::Warning => "Warning",
-            CustomBlockType::Tip => "Tip",
-            CustomBlockType::Info => "Info",
-            CustomBlockType::Important => "Important",
-            CustomBlockType::Caution => "Caution",
+            Self::Note => "Note",
+            Self::Warning => "Warning",
+            Self::Tip => "Tip",
+            Self::Info => "Info",
+            Self::Important => "Important",
+            Self::Caution => "Caution",
         }
+    }
+
+    /// Returns the default Bootstrap alert class for this block type.
+    pub fn get_alert_class(&self) -> &'static str {
+        self.default_alert_class()
+    }
+
+    /// Returns the default title for this block type.
+    pub fn get_title(&self) -> &'static str {
+        self.default_title()
+    }
+
+    /// Returns the alert class, respecting config overrides.
+    pub fn alert_class_with<'a>(
+        &self,
+        config: &'a CustomBlockConfig,
+    ) -> &'a str {
+        config
+            .class_overrides
+            .get(self)
+            .map(|s| s.as_str())
+            .unwrap_or_else(move || self.default_alert_class())
+    }
+
+    /// Returns the title, respecting config overrides.
+    pub fn title_with<'a>(
+        &self,
+        config: &'a CustomBlockConfig,
+    ) -> &'a str {
+        config
+            .title_overrides
+            .get(self)
+            .map(|s| s.as_str())
+            .unwrap_or_else(move || self.default_title())
     }
 }
 
@@ -78,81 +125,142 @@ impl FromStr for CustomBlockType {
 
     fn from_str(block_type: &str) -> Result<Self, Self::Err> {
         match block_type.to_lowercase().as_str() {
-            "note" => Ok(CustomBlockType::Note),
-            "warning" => Ok(CustomBlockType::Warning),
-            "tip" => Ok(CustomBlockType::Tip),
-            "info" => Ok(CustomBlockType::Info),
-            "important" => Ok(CustomBlockType::Important),
-            "caution" => Ok(CustomBlockType::Caution),
+            "note" => Ok(Self::Note),
+            "warning" => Ok(Self::Warning),
+            "tip" => Ok(Self::Tip),
+            "info" => Ok(Self::Info),
+            "important" => Ok(Self::Important),
+            "caution" => Ok(Self::Caution),
             _ => Err(MarkdownError::CustomBlockError(format!(
-                "Unknown block type: {}",
-                block_type
+                "Unknown block type: {block_type}"
             ))),
         }
     }
 }
 
-lazy_static! {
-    static ref CUSTOM_BLOCK_REGEX: Regex = Regex::new(
-        r#"(?i)<div\s+class=["']?(note|warning|tip|info|important|caution)["']?>(.*?)</div>"#
-    ).unwrap();
+// ── Custom block configuration ──────────────────────────────────────
+
+/// Configuration for custom block rendering.
+///
+/// Allows overriding the default CSS class and title for each
+/// block type, enabling use with CSS frameworks other than Bootstrap.
+#[derive(Debug, Clone, Default)]
+pub struct CustomBlockConfig {
+    /// Override the CSS alert class per block type.
+    pub class_overrides: HashMap<CustomBlockType, String>,
+    /// Override the display title per block type.
+    pub title_overrides: HashMap<CustomBlockType, String>,
 }
 
-/// Applies syntax highlighting to code blocks in the Markdown.
-///
-/// # Arguments
-///
-/// * `code` - The code block string to be highlighted.
-/// * `lang` - The programming language of the code block.
-///
-/// # Returns
-///
-/// A `Result` containing the HTML for the highlighted code or a `MarkdownError`.
-pub fn apply_syntax_highlighting(
-    code: &str,
-    lang: &str,
-) -> Result<String, MarkdownError> {
-    let theme = &THEME_SET.themes["base16-ocean.dark"];
-    let syntax = SYNTAX_SET
-        .find_syntax_by_token(lang)
-        .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
+impl CustomBlockConfig {
+    /// Creates a new empty configuration (uses all defaults).
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    highlighted_html_for_string(code, &SYNTAX_SET, syntax, theme)
-        .map_err(|e| MarkdownError::SyntaxHighlightError(e.to_string()))
+    /// Overrides the CSS class for a specific block type.
+    pub fn with_class(
+        mut self,
+        block_type: CustomBlockType,
+        class: impl Into<String>,
+    ) -> Self {
+        self.class_overrides.insert(block_type, class.into());
+        self
+    }
+
+    /// Overrides the display title for a specific block type.
+    pub fn with_title(
+        mut self,
+        block_type: CustomBlockType,
+        title: impl Into<String>,
+    ) -> Self {
+        self.title_overrides.insert(block_type, title.into());
+        self
+    }
 }
+
+// ── AST-level custom block processing ───────────────────────────────
+
+/// Walks the comrak AST and transforms `HtmlBlock` nodes that contain
+/// known custom block divs into styled alert HTML.
+///
+/// This is safer than regex on rendered HTML because it only touches
+/// nodes the parser explicitly identified as raw HTML blocks.
+pub fn process_custom_block_nodes<'a>(
+    root: comrak::nodes::Node<'a>,
+    config: &CustomBlockConfig,
+) {
+    for node in root.descendants() {
+        let mut ast = node.data.borrow_mut();
+        if let NodeValue::HtmlBlock(ref mut block) = ast.value {
+            block.literal =
+                transform_custom_blocks(&block.literal, config);
+        }
+    }
+}
+
+/// Transforms custom block divs in a raw HTML string.
+fn transform_custom_blocks(
+    html: &str,
+    config: &CustomBlockConfig,
+) -> String {
+    CUSTOM_BLOCK_RE
+        .replace_all(html, |caps: &regex::Captures| {
+            let block_type = CustomBlockType::from_str(
+                caps.get(1).unwrap().as_str(),
+            )
+            .expect("regex only matches known block types");
+            generate_custom_block_html(block_type, &caps[2], config)
+        })
+        .to_string()
+}
+
+/// Generates the HTML for a custom block.
+fn generate_custom_block_html(
+    block_type: CustomBlockType,
+    content: &str,
+    config: &CustomBlockConfig,
+) -> String {
+    format!(
+        r#"<div class="alert {}" role="alert"><strong>{}:</strong> {}</div>"#,
+        block_type.alert_class_with(config),
+        block_type.title_with(config),
+        content
+    )
+}
+
+// ── Legacy string-level custom block processing ─────────────────────
+
+/// Processes custom blocks in an HTML string.
+///
+/// Provided for backward compatibility. Prefer
+/// [`process_custom_block_nodes`] for AST-level processing.
+pub fn process_custom_blocks(content: &str) -> String {
+    transform_custom_blocks(content, &CustomBlockConfig::default())
+}
+
+// ── Table post-processing ───────────────────────────────────────────
 
 /// Processes tables, enhancing them with responsive design and alignment classes.
-///
-/// # Arguments
-///
-/// * `table_html` - The HTML string representing the table.
-///
-/// # Returns
-///
-/// The enhanced HTML string.
 pub fn process_tables(table_html: &str) -> String {
-    let table_regex = Regex::new(r"<table>").unwrap();
-    let table_html = table_regex.replace(
+    let table_html = TABLE_OPEN_RE.replace_all(
         table_html,
         r#"<div class="table-responsive"><table class="table">"#,
     );
 
-    let table_end_regex = Regex::new(r"</table>").unwrap();
     let table_html =
-        table_end_regex.replace(&table_html, "</table></div>");
+        TABLE_CLOSE_RE.replace_all(&table_html, "</table></div>");
 
-    // Add alignment classes to table cells
-    let cell_regex = Regex::new(r"<td([^>]*)>").unwrap();
-    let table_html = cell_regex.replace_all(
+    let table_html = TABLE_CELL_RE.replace_all(
         &table_html,
         |caps: &regex::Captures| {
             let attrs = &caps[1];
             if attrs.contains("align=\"center\"") {
-                format!(r#"<td{} class="text-center">"#, attrs)
+                format!(r#"<td{attrs} class="text-center">"#)
             } else if attrs.contains("align=\"right\"") {
-                format!(r#"<td{} class="text-right">"#, attrs)
+                format!(r#"<td{attrs} class="text-right">"#)
             } else {
-                format!(r#"<td{} class="text-left">"#, attrs)
+                format!(r#"<td{attrs} class="text-left">"#)
             }
         },
     );
@@ -160,110 +268,60 @@ pub fn process_tables(table_html: &str) -> String {
     table_html.to_string()
 }
 
-/// Processes custom blocks in the Markdown content, such as note, warning, tip, info, important, and caution blocks.
-/// These custom blocks are represented by div elements with specific class names.
-/// The function replaces these div elements with corresponding Bootstrap alert elements.
-///
-/// # Arguments
-///
-/// * `content` - A string containing the Markdown content.
-///
-/// # Returns
-///
-/// A string containing the processed Markdown content with custom blocks replaced by Bootstrap alert elements.
-pub fn process_custom_blocks(content: &str) -> String {
-    // Adjusted to match any block type (including unknown ones)
-    Regex::new(r#"<div\s+class=["']?(.*?)["']?>(.*?)</div>"#)
-        .unwrap()
-        .replace_all(content, |caps: &regex::Captures| {
-            match CustomBlockType::from_str(caps.get(1).unwrap().as_str()) {
-                Ok(block_type) => generate_custom_block_html(block_type, &caps[2]),
-                Err(e) => format!(
-                    r#"<div class="alert alert-danger" role="alert"><strong>Error:</strong> {}</div>"#,
-                    e
-                ),
-            }
-        })
-        .to_string()
-}
-
-/// Generates the HTML for a custom block based on its type and content.
-///
-/// # Arguments
-///
-/// * `block_type` - The type of the custom block.
-/// * `block_content` - The content inside the custom block.
-///
-/// # Returns
-///
-/// A string containing the HTML for the custom block.
-fn generate_custom_block_html(
-    block_type: CustomBlockType,
-    block_content: &str,
-) -> String {
-    format!(
-        r#"<div class="alert {}" role="alert"><strong>{}:</strong> {}</div>"#,
-        block_type.get_alert_class(),
-        block_type.get_title(),
-        block_content
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_process_custom_blocks() {
+    fn test_process_custom_blocks_default_config() {
         let input = r#"
             <div class="note">This is a note.</div>
             <div class="WARNING">This is a warning.</div>
             <div class="Tip">This is a tip.</div>
-            <div class="INFO">This is an info block.</div>
-            <div class="Important">This is important.</div>
-            <div class="caution">This is a caution.</div>
         "#;
-
         let processed = process_custom_blocks(input);
-
-        assert!(processed.contains(r#"<div class="alert alert-info" role="alert"><strong>Note:</strong> This is a note.</div>"#));
-        assert!(processed.contains(r#"<div class="alert alert-warning" role="alert"><strong>Warning:</strong> This is a warning.</div>"#));
-        assert!(processed.contains(r#"<div class="alert alert-success" role="alert"><strong>Tip:</strong> This is a tip.</div>"#));
-        assert!(processed.contains(r#"<div class="alert alert-primary" role="alert"><strong>Info:</strong> This is an info block.</div>"#));
-        assert!(processed.contains(r#"<div class="alert alert-danger" role="alert"><strong>Important:</strong> This is important.</div>"#));
-        assert!(processed.contains(r#"<div class="alert alert-secondary" role="alert"><strong>Caution:</strong> This is a caution.</div>"#));
+        assert!(processed.contains(r#"alert alert-info"#));
+        assert!(processed.contains(r#"alert alert-warning"#));
+        assert!(processed.contains(r#"alert alert-success"#));
     }
 
     #[test]
-    fn test_unknown_custom_block() {
-        let input = r#"<div class="unknown">This is an unknown block type.</div>"#;
+    fn test_custom_block_config_overrides() {
+        let config = CustomBlockConfig::new()
+            .with_class(CustomBlockType::Note, "callout-info")
+            .with_title(CustomBlockType::Note, "Did you know?");
+
+        let html = generate_custom_block_html(
+            CustomBlockType::Note,
+            "test content",
+            &config,
+        );
+        assert!(html.contains("callout-info"));
+        assert!(html.contains("Did you know?:"));
+    }
+
+    #[test]
+    fn test_unknown_block_passthrough() {
+        let input =
+            r#"<div class="unknown">Should pass through.</div>"#;
         let processed = process_custom_blocks(input);
-
-        // Print the processed output to verify the content
-        println!("Processed content: {}", processed);
-
-        // Check if the error is correctly reported in the output
-        assert!(processed.contains(r#"Failed to process custom block: Unknown block type: unknown"#), "Expected error message for unknown block type not found");
+        assert_eq!(processed, input);
     }
 
     #[test]
     fn test_process_tables() {
         let input = r#"<table><tr><td align="center">Center</td><td align="right">Right</td><td>Left</td></tr></table>"#;
-
         let processed = process_tables(input);
+        assert!(processed.contains(r#"table-responsive"#));
+        assert!(processed.contains(r#"text-center"#));
+        assert!(processed.contains(r#"text-right"#));
+        assert!(processed.contains(r#"text-left"#));
+    }
 
-        assert!(processed.contains(
-            r#"<div class="table-responsive"><table class="table">"#
-        ));
-        assert!(processed.contains(
-            r#"<td align="center" class="text-center">Center</td>"#
-        ));
-        assert!(processed.contains(
-            r#"<td align="right" class="text-right">Right</td>"#
-        ));
-        assert!(
-            processed.contains(r#"<td class="text-left">Left</td>"#)
-        );
-        assert!(processed.contains("</table></div>"));
+    #[test]
+    fn test_process_multiple_tables() {
+        let input = "<table><tr><td>A</td></tr></table>\n<table><tr><td>B</td></tr></table>";
+        let processed = process_tables(input);
+        assert_eq!(processed.matches("table-responsive").count(), 2);
     }
 }

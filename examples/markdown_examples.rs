@@ -11,7 +11,7 @@
 
 #![allow(missing_docs)]
 
-use mdx_gen::{process_markdown, Options, MarkdownOptions};
+use mdx_gen::{process_markdown, MarkdownOptions, Options};
 
 /// Entry point for the MDX Gen Markdown processing examples.
 ///
@@ -21,8 +21,7 @@ use mdx_gen::{process_markdown, Options, MarkdownOptions};
 /// # Errors
 ///
 /// Returns an error if any of the example functions fail.
-#[tokio::main]
-pub(crate) async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🧪 MDX Gen Markdown Processing Examples\n");
 
     basic_markdown_conversion()?;

@@ -22,8 +22,7 @@ use mdx_gen::{process_markdown, MarkdownError, MarkdownOptions};
 /// # Errors
 ///
 /// Returns an error if any of the example functions fail.
-#[tokio::main]
-pub(crate) async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🧪 MDX Gen Error Handling Examples\n");
 
     parse_error_example()?;

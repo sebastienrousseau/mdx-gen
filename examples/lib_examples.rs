@@ -6,8 +6,8 @@
 
 use mdx_gen::extensions::CustomBlockType;
 use mdx_gen::{
-    apply_syntax_highlighting, process_markdown, Options,
-    MarkdownOptions,
+    apply_syntax_highlighting, process_markdown, MarkdownOptions,
+    Options,
 };
 
 /// Example of processing a basic Markdown string into HTML.
@@ -160,8 +160,7 @@ pub fn example_enhanced_tables(
 /// # Errors
 ///
 /// Returns an error if any of the example functions fail.
-#[tokio::main]
-pub(crate) async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🧪 MDX Gen Library Examples\n");
 
     example_basic_markdown_conversion()?;

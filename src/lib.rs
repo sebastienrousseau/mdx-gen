@@ -1,5 +1,5 @@
+#![forbid(unsafe_code)]
 // src/lib.rs
-
 #![doc = include_str!("../README.md")]
 #![doc(
     html_favicon_url = "https://kura.pro/mdx-gen/images/favicon.ico",
@@ -12,35 +12,38 @@
 /// The `error` module contains error types for Markdown processing.
 pub mod error;
 
-/// The `extensions` module contains custom block extensions for Markdown processing.
+/// The `extensions` module contains custom block and table extensions.
 pub mod extensions;
 
-/// The `markdown` module contains functions for parsing, converting, and rendering Markdown.
+/// Syntax highlighting adapter for comrak's plugin system.
+#[cfg(feature = "syntax_highlighting")]
+pub mod highlight;
+
+/// YAML frontmatter extraction and parsing.
+pub mod frontmatter;
+
+/// The `markdown` module contains the core processing pipeline.
 pub mod markdown;
 
-// Re-exporting key items for easier access by the library's users.
+// ── Re-exports ──────────────────────────────────────────────────────
 
-/// Represents errors that may occur during Markdown processing.
-///
-/// This includes errors related to syntax, rendering, and custom block handling.
 pub use error::MarkdownError;
 
-/// Applies syntax highlighting to code blocks within the processed Markdown.
+/// Applies syntax highlighting to code (standalone usage).
 ///
 /// # Example
 /// ```
 /// use mdx_gen::apply_syntax_highlighting;
 /// let highlighted = apply_syntax_highlighting("fn main() {}", "rust");
 /// ```
-pub use extensions::apply_syntax_highlighting;
+#[cfg(feature = "syntax_highlighting")]
+pub use highlight::apply_syntax_highlighting;
 
-/// Represents different alignment options for table columns in enhanced Markdown tables.
 pub use extensions::ColumnAlignment;
-
-/// Represents the type of custom block, such as admonitions or custom embedded content.
+pub use extensions::CustomBlockConfig;
 pub use extensions::CustomBlockType;
 
-/// Processes a Markdown string and converts it into HTML, applying custom blocks and syntax highlighting.
+/// Processes a Markdown string and converts it into HTML.
 ///
 /// # Example
 /// ```
@@ -49,9 +52,11 @@ pub use extensions::CustomBlockType;
 ///
 /// let markdown_input = "# Hello, World!";
 /// let mut comrak_options = Options::default();
-/// comrak_options.extension.table = true;  // Enable Comrak table extension
+/// comrak_options.extension.table = true;
 ///
-/// let options = MarkdownOptions::default().with_comrak_options(comrak_options);  // Chaining method call
+/// let options = MarkdownOptions::default()
+///     .with_custom_blocks(false)
+///     .with_comrak_options(comrak_options);
 ///
 /// let html_output = process_markdown(markdown_input, &options).expect("Failed to process markdown");
 /// assert!(html_output.contains("<h1>Hello, World!</h1>"));
@@ -59,13 +64,13 @@ pub use extensions::CustomBlockType;
 ///
 /// # Errors
 ///
-/// This function will return a `MarkdownError` if the input contains invalid syntax or cannot be parsed.
+/// Returns a `MarkdownError` if options are invalid, input exceeds
+/// the size limit, or rendering fails.
 pub use markdown::process_markdown;
 
-/// Options for configuring how Markdown is processed, including syntax highlighting and custom block support.
 pub use markdown::MarkdownOptions;
 
-/// Re-export comrak's options for convenience when customizing Markdown processing.
+/// Re-export comrak's options for convenience.
 ///
 /// # Usage
 /// ```

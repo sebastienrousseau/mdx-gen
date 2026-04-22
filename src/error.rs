@@ -1,7 +1,5 @@
 //! Error handling for the MDX Gen library.
 
-use anyhow::{Context, Result};
-
 /// Represents all the errors that can occur during Markdown processing.
 #[derive(thiserror::Error, Debug)]
 pub enum MarkdownError {
@@ -28,27 +26,25 @@ pub enum MarkdownError {
     /// An error occurred while loading a syntax set.
     #[error("Failed to load syntax set: {0}")]
     SyntaxSetError(String),
-}
 
-/// A helper function that adds context to errors occurring during Markdown processing.
-pub fn parse_markdown_with_context(input: &str) -> Result<String> {
-    // Add context without overriding the original error message
-    let parsed_content = some_markdown_parsing_function(input)
-        .with_context(|| "Failed while parsing markdown content")?;
+    /// The input exceeds the configured maximum size.
+    #[error(
+        "Input too large: {size} bytes exceeds limit of {limit} bytes"
+    )]
+    InputTooLarge {
+        /// Actual input size in bytes.
+        size: usize,
+        /// Configured maximum in bytes.
+        limit: usize,
+    },
 
-    Ok(parsed_content)
-}
+    /// An error occurred while rendering HTML.
+    #[error("HTML rendering error: {0}")]
+    RenderError(String),
 
-// Placeholder for the actual markdown parsing function
-fn some_markdown_parsing_function(input: &str) -> Result<String> {
-    // Simulate success or failure
-    if input.is_empty() {
-        return Err(MarkdownError::ParseError(
-            "Input is empty".to_string(),
-        )
-        .into());
-    }
-    Ok("Parsed markdown content".to_string())
+    /// An error occurred while parsing YAML frontmatter.
+    #[error("Frontmatter error: {0}")]
+    FrontmatterError(String),
 }
 
 #[cfg(test)]
@@ -56,35 +52,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_empty_input() {
-        let result = some_markdown_parsing_function("");
-        assert!(result.is_err());
+    fn test_error_display() {
+        let cases: Vec<(MarkdownError, &str)> = vec![
+            (
+                MarkdownError::ParseError("bad input".into()),
+                "Failed to parse Markdown: bad input",
+            ),
+            (
+                MarkdownError::ConversionError("failed".into()),
+                "Failed to convert Markdown to HTML: failed",
+            ),
+            (
+                MarkdownError::InputTooLarge {
+                    size: 2_000_000,
+                    limit: 1_000_000,
+                },
+                "Input too large: 2000000 bytes exceeds limit of 1000000 bytes",
+            ),
+            (
+                MarkdownError::RenderError("fmt".into()),
+                "HTML rendering error: fmt",
+            ),
+            (
+                MarkdownError::FrontmatterError("invalid yaml".into()),
+                "Frontmatter error: invalid yaml",
+            ),
+        ];
 
-        if let Err(err) = result {
-            assert_eq!(
-                format!("{}", err),
-                "Failed to parse Markdown: Input is empty"
-            );
-        }
-    }
-
-    #[test]
-    fn test_successful_parse() {
-        let result =
-            some_markdown_parsing_function("Some markdown content");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "Parsed markdown content");
-    }
-
-    #[test]
-    fn test_parse_markdown_with_context() {
-        let result = parse_markdown_with_context("");
-        assert!(result.is_err());
-
-        if let Err(err) = result {
-            let err_msg = format!("{:?}", err);
-            assert!(err_msg
-                .contains("Failed while parsing markdown content"));
+        for (error, expected) in cases {
+            assert_eq!(format!("{error}"), expected);
         }
     }
 }

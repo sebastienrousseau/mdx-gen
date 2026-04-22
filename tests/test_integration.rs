@@ -4,10 +4,11 @@ use mdx_gen::{process_markdown, MarkdownOptions};
 fn test_basic_markdown_conversion() {
     let markdown = "# Hello, world!";
     let options = MarkdownOptions::new()
-        .with_enhanced_tables(false) // Disable enhanced tables for this test
+        .with_enhanced_tables(false)
+        .with_custom_blocks(false)
         .with_comrak_options({
             let mut opts = comrak::Options::default();
-            opts.extension.table = false; // Ensure the table extension is disabled
+            opts.extension.table = false;
             opts
         });
 
@@ -19,11 +20,12 @@ fn test_basic_markdown_conversion() {
 fn test_markdown_with_extensions() {
     let markdown = "This is a ~~strikethrough~~ test.";
     let options = MarkdownOptions::new()
-        .with_enhanced_tables(false) // Disable enhanced tables for this test
+        .with_enhanced_tables(false)
+        .with_custom_blocks(false)
         .with_comrak_options({
             let mut opts = comrak::Options::default();
-            opts.extension.strikethrough = true; // Enable strikethrough
-            opts.extension.table = false; // Disable the table extension
+            opts.extension.strikethrough = true;
+            opts.extension.table = false;
             opts
         });
 
@@ -38,12 +40,14 @@ fn test_markdown_with_extensions() {
 fn test_markdown_with_links() {
     let markdown = "[MDX Generator](https://mdxgen.com/)";
     let options = MarkdownOptions::new()
-        .with_enhanced_tables(false) // Disable enhanced tables for this test
+        .with_enhanced_tables(false)
+        .with_custom_blocks(false)
         .with_comrak_options({
             let mut opts = comrak::Options::default();
-            opts.extension.table = false; // Disable the table extension
+            opts.extension.table = false;
             opts
-        });
+        })
+        .with_unsafe_html(true);
 
     let result = process_markdown(markdown, &options).unwrap();
     assert_eq!(

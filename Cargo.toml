@@ -3,11 +3,15 @@
 # with support for custom blocks, enhanced table formatting, and flexible configuration options.
 # -----------------------------------------------------------------------------
 
+[workspace]
+members = [".", "crates/serde_yml"]
+resolver = "2"
+
 [package]
 name = "mdx-gen"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
-rust-version = "1.56.0"
+rust-version = "1.85.0"
 license = "MIT OR Apache-2.0"
 description = """
 A robust Rust library for processing Markdown and converting it to HTML with support for custom blocks, enhanced table formatting, and flexible configuration options.
@@ -42,20 +46,14 @@ exclude = [
 # -----------------------------------------------------------------------------
 
 [dependencies]
-anyhow = "1.0"
+ammonia = "4.1"
 comrak = "0.50"
-env_logger = "0.11"
 html-escape = "0.2"
-lazy_static = "1.5"
 log = "0.4"
 regex = "1.12"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0"
-serde_yml = { version = "0.0.12", optional = true }
+serde_yml = { path = "crates/serde_yml", optional = true }
 syntect = { version = "5.2", optional = true }
 thiserror = "2.0"
-tokio = { version = "1.50", features = ["full"] }
-toml = "0.8"
 
 [build-dependencies]
 version_check = "0.9"
@@ -69,17 +67,11 @@ path = "src/lib.rs"
 # -----------------------------------------------------------------------------
 
 [features]
-# Default feature set includes syntax highlighting, custom blocks, and enhanced tables.
-default = ["syntax_highlighting", "custom_blocks", "enhanced_tables"]
+# Default feature set includes syntax highlighting.
+default = ["syntax_highlighting"]
 
 # Enable syntax highlighting using syntect
 syntax_highlighting = ["syntect"]
-
-# Enable custom block processing
-custom_blocks = []
-
-# Enable enhanced table formatting
-enhanced_tables = []
 
 # Enable YAML support
 yaml_support = ["serde_yml"]
@@ -100,3 +92,38 @@ harness = false
 
 [profile.bench]
 debug = true
+
+[profile.dev]
+codegen-units = 256
+debug = true
+debug-assertions = true
+incremental = true
+lto = false
+opt-level = 0
+overflow-checks = true
+panic = 'unwind'
+rpath = false
+strip = false
+
+[profile.release]
+codegen-units = 1
+debug = false
+debug-assertions = false
+incremental = false
+lto = true
+opt-level = 3
+overflow-checks = false
+panic = "abort"
+rpath = false
+strip = "symbols"
+
+[profile.test]
+codegen-units = 256
+debug = true
+debug-assertions = true
+incremental = true
+lto = false
+opt-level = 0
+overflow-checks = true
+rpath = false
+strip = false
