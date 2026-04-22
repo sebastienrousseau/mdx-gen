@@ -47,12 +47,12 @@ exclude = [
 
 [dependencies]
 ammonia = "4.1"
-comrak = "0.50"
+comrak = { version = "0.50", default-features = false }
 html-escape = "0.2"
 log = "0.4"
 regex = "1.12"
 serde_yml = { path = "crates/serde_yml", optional = true }
-syntect = { version = "5.2", optional = true }
+syntect = { version = "5.2", optional = true, default-features = false, features = ["default-themes", "default-syntaxes", "html", "regex-fancy"] }
 thiserror = "2.0"
 
 [build-dependencies]

@@ -273,15 +273,13 @@ impl<'a> Parser<'a> {
                 b'"' if !in_single => {
                     in_double = !in_double;
                 }
-                b':' if !in_single && !in_double => {
-                    // Must be followed by space, EOL,
-                    // or be at end
-                    if i + 1 >= bytes.len()
+                b':' if !in_single
+                    && !in_double
+                    && (i + 1 >= bytes.len()
                         || bytes[i + 1] == b' '
-                        || bytes[i + 1] == b'\t'
-                    {
-                        return Some(i);
-                    }
+                        || bytes[i + 1] == b'\t') =>
+                {
+                    return Some(i);
                 }
                 b'#' if !in_single && !in_double => {
                     // Rest is comment
@@ -907,10 +905,12 @@ fn strip_inline_comment(line: &str) -> &str {
             b'"' if !in_single => {
                 in_double = !in_double;
             }
-            b' ' if !in_single && !in_double => {
-                if i + 1 < bytes.len() && bytes[i + 1] == b'#' {
-                    return &line[..i];
-                }
+            b' ' if !in_single
+                && !in_double
+                && i + 1 < bytes.len()
+                && bytes[i + 1] == b'#' =>
+            {
+                return &line[..i];
             }
             _ => {}
         }

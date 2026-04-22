@@ -1,6 +1,6 @@
 [package]
 name = "serde_yml"
-version = "0.0.12"
+version = "0.1.0"
 edition = "2021"
 description = "Local safe YAML serde implementation"
 license = "MIT OR Apache-2.0"
