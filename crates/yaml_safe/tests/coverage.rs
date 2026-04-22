@@ -3330,3 +3330,342 @@ fn as_mapping_mut_on_non_mapping() {
     let mut v = Value::String("not a map".into());
     assert!(v.as_mapping_mut().is_none());
 }
+
+// ── Additional targeted coverage for remaining gaps ────��────────────
+
+#[test]
+fn mapping_index_ops() {
+    let mut m = Mapping::new();
+    m.insert(Value::String("a".into()), Value::Number(Number::from(1)));
+    // std::ops::Index
+    let _ = &m[Value::String("a".into())];
+}
+
+#[test]
+fn value_total_cmp_coverage() {
+    // Exercise all arms of total_cmp by sorting mixed types
+    let mut vals = vec![
+        Value::Tagged(Box::new(TaggedValue {
+            tag: Tag::new("!b"),
+            value: Value::Null,
+        })),
+        Value::Tagged(Box::new(TaggedValue {
+            tag: Tag::new("!a"),
+            value: Value::Null,
+        })),
+        Value::Mapping(Mapping::new()),
+        Value::Sequence(vec![]),
+        Value::String("z".into()),
+        Value::String("a".into()),
+        Value::Number(Number::from(2)),
+        Value::Number(Number::from(1)),
+        Value::Bool(true),
+        Value::Bool(false),
+        Value::Null,
+    ];
+    vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+    // First should be Null, last should be Tagged
+    assert!(vals[0].is_null());
+}
+
+#[test]
+fn value_get_through_tagged() {
+    let mut m = Mapping::new();
+    m.insert(
+        Value::String("key".into()),
+        Value::Number(Number::from(42)),
+    );
+    let tagged = Value::Tagged(Box::new(TaggedValue {
+        tag: Tag::new("!map"),
+        value: Value::Mapping(m),
+    }));
+    // get should unwrap tags
+    let result = tagged.get("key");
+    assert!(result.is_some());
+}
+
+#[test]
+fn tagged_value_deserialize_enum() {
+    // Tagged values can represent enums
+    let yaml = "!variant data\n";
+    let v: Value = from_str(yaml).unwrap();
+    assert!(matches!(v, Value::Tagged(_)));
+}
+
+#[test]
+fn ser_emit_inline_sequence_in_mapping() {
+    // Force inline sequence by nesting
+    let mut m = Mapping::new();
+    let inner = Value::Sequence(vec![
+        Value::Number(Number::from(1)),
+        Value::Number(Number::from(2)),
+    ]);
+    m.insert(Value::String("items".into()), inner);
+    let yaml = to_string(&Value::Mapping(m)).unwrap();
+    assert!(yaml.contains("items:"));
+}
+
+#[test]
+fn ser_emit_nested_mapping_in_sequence() {
+    let mut inner = Mapping::new();
+    inner.insert(
+        Value::String("x".into()),
+        Value::Number(Number::from(1)),
+    );
+    let seq = Value::Sequence(vec![Value::Mapping(inner)]);
+    let yaml = to_string(&seq).unwrap();
+    assert!(yaml.contains("- x:"));
+}
+
+#[test]
+fn de_single_quoted_with_escape() {
+    let yaml = "msg: 'it''s a test'\n";
+    let v: Value = from_str(yaml).unwrap();
+    let m = v.as_mapping().unwrap();
+    let msg = m.get(Value::String("msg".into())).unwrap();
+    assert_eq!(msg.as_str().unwrap(), "it's a test");
+}
+
+#[test]
+fn de_double_quoted_escapes_comprehensive() {
+    let yaml = r#"a: "tab\there"
+b: "newline\nhere"
+c: "null\0here"
+d: "backslash\\here"
+"#;
+    let v: Value = from_str(yaml).unwrap();
+    let m = v.as_mapping().unwrap();
+    assert!(m
+        .get(Value::String("a".into()))
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains('\t'));
+    assert!(m
+        .get(Value::String("b".into()))
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains('\n'));
+    assert!(m
+        .get(Value::String("d".into()))
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains('\\'));
+}
+
+#[test]
+fn de_block_scalar_all_chomp_modes() {
+    // Literal with strip
+    let yaml = "a: |-\n  line1\n  line2\n\n";
+    let v: Value = from_str(yaml).unwrap();
+    let s = v
+        .as_mapping()
+        .unwrap()
+        .get(Value::String("a".into()))
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert!(!s.ends_with('\n'));
+
+    // Literal with keep
+    let yaml = "a: |+\n  line1\n  line2\n\n";
+    let v: Value = from_str(yaml).unwrap();
+    let s = v
+        .as_mapping()
+        .unwrap()
+        .get(Value::String("a".into()))
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert!(s.ends_with('\n'));
+
+    // Folded with strip
+    let yaml = "a: >-\n  line1\n  line2\n\n";
+    let v: Value = from_str(yaml).unwrap();
+    let s = v
+        .as_mapping()
+        .unwrap()
+        .get(Value::String("a".into()))
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert!(!s.ends_with('\n'));
+
+    // Folded with keep
+    let yaml = "a: >+\n  line1\n  line2\n\n";
+    let v: Value = from_str(yaml).unwrap();
+    let s = v
+        .as_mapping()
+        .unwrap()
+        .get(Value::String("a".into()))
+        .unwrap()
+        .as_str()
+        .unwrap();
+    assert!(s.ends_with('\n'));
+}
+
+#[test]
+fn de_complex_flow_mapping() {
+    let yaml = "{a: {b: 1, c: 2}, d: [1, 2, {e: 3}]}";
+    let v: Value = from_str(yaml).unwrap();
+    assert!(v.is_mapping());
+    let m = v.as_mapping().unwrap();
+    assert_eq!(m.len(), 2);
+}
+
+#[test]
+fn number_partial_ord_cross_type() {
+    let pos = Number::from(5u64);
+    let neg = Number::from(-3i64);
+    let float = Number::from(1.5f64);
+    // Cross-type comparisons exercise PartialOrd
+    assert!(pos > neg);
+    assert!(float > neg);
+    // pos vs float comparison depends on internal representation
+    assert!(pos.partial_cmp(&float).is_some());
+}
+
+#[test]
+fn mapping_vacant_entry_into_key() {
+    let mut m = Mapping::new();
+    let key = Value::String("new_key".into());
+    if let yaml_safe::mapping::Entry::Vacant(v) = m.entry(key.clone()) {
+        let k = v.into_key();
+        assert_eq!(k, key);
+    }
+}
+
+#[test]
+fn mapping_occupied_remove_entry() {
+    let mut m = Mapping::new();
+    m.insert(Value::String("k".into()), Value::String("v".into()));
+    if let yaml_safe::mapping::Entry::Occupied(o) =
+        m.entry(Value::String("k".into()))
+    {
+        let (k, v) = o.remove_entry();
+        assert_eq!(k, Value::String("k".into()));
+        assert_eq!(v, Value::String("v".into()));
+    }
+    assert!(m.is_empty());
+}
+
+#[test]
+fn mapping_occupied_into_mut() {
+    let mut m = Mapping::new();
+    m.insert(Value::String("k".into()), Value::Number(Number::from(1)));
+    if let yaml_safe::mapping::Entry::Occupied(o) =
+        m.entry(Value::String("k".into()))
+    {
+        let v = o.into_mut();
+        *v = Value::Number(Number::from(99));
+    }
+    assert_eq!(m.get("k"), Some(&Value::Number(Number::from(99))));
+}
+
+#[test]
+fn error_location_struct() {
+    // Location is returned by Error::location() which always returns None
+    // but we can test the struct exists
+    let err: yaml_safe::Result<Value> = from_str("[unclosed");
+    assert!(err.unwrap_err().location().is_none());
+}
+
+#[test]
+fn de_mapping_with_quoted_keys() {
+    let yaml = "'key with spaces': value\n\"another key\": 42\n";
+    let v: Value = from_str(yaml).unwrap();
+    let m = v.as_mapping().unwrap();
+    assert!(m.contains_key("key with spaces"));
+    assert!(m.contains_key("another key"));
+}
+
+#[test]
+fn de_all_null_variants() {
+    for input in ["null", "Null", "NULL", "~"] {
+        let v: Value = from_str(input).unwrap();
+        assert!(v.is_null(), "Expected null for input: {input}");
+    }
+}
+
+#[test]
+fn de_all_bool_variants() {
+    for (input, expected) in [
+        ("true", true),
+        ("True", true),
+        ("TRUE", true),
+        ("false", false),
+        ("False", false),
+        ("FALSE", false),
+    ] {
+        let v: Value = from_str(input).unwrap();
+        assert_eq!(v.as_bool(), Some(expected), "For input: {input}");
+    }
+}
+
+#[test]
+fn de_special_float_variants() {
+    for input in [".nan", ".NaN", ".NAN"] {
+        let v: Value = from_str(input).unwrap();
+        assert!(v.as_f64().unwrap().is_nan(), "For input: {input}");
+    }
+    for input in [".inf", ".Inf", ".INF"] {
+        let v: Value = from_str(input).unwrap();
+        assert!(
+            v.as_f64().unwrap().is_infinite()
+                && v.as_f64().unwrap() > 0.0,
+            "For input: {input}"
+        );
+    }
+    for input in ["-.inf", "-.Inf", "-.INF"] {
+        let v: Value = from_str(input).unwrap();
+        assert!(
+            v.as_f64().unwrap().is_infinite()
+                && v.as_f64().unwrap() < 0.0,
+            "For input: {input}"
+        );
+    }
+}
+
+#[test]
+fn de_scientific_notation() {
+    let v: Value = from_str("1.5e3").unwrap();
+    assert!((v.as_f64().unwrap() - 1500.0).abs() < 0.1);
+
+    let v: Value = from_str("2E-2").unwrap();
+    assert!((v.as_f64().unwrap() - 0.02).abs() < 0.001);
+}
+
+#[test]
+fn de_underscore_in_numbers() {
+    let v: Value = from_str("1_000_000").unwrap();
+    assert_eq!(v.as_u64(), Some(1_000_000));
+}
+
+#[test]
+fn ser_tagged_value() {
+    let tagged = Value::Tagged(Box::new(TaggedValue {
+        tag: Tag::new("!custom"),
+        value: Value::Mapping({
+            let mut m = Mapping::new();
+            m.insert(
+                Value::String("a".into()),
+                Value::Number(Number::from(1)),
+            );
+            m
+        }),
+    }));
+    let yaml = to_string(&tagged).unwrap();
+    assert!(yaml.contains("!custom"));
+}
+
+#[test]
+fn value_from_impls() {
+    let _: Value = Value::from(true);
+    let _: Value = Value::from("hello");
+    let _: Value = Value::from(String::from("world"));
+    let _: Value = Value::from(42i64);
+    let _: Value = Value::from(42u64);
+    let _: Value = Value::from(1.5f64);
+}

@@ -1,0 +1,32 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 5%
+    patch:
+      default:
+        target: 75%
+        threshold: 10%
+
+  # Separate targets for the main library vs vendored deps
+  flags:
+    mdx-gen:
+      paths:
+        - src/
+      carryforward: true
+    yaml-safe:
+      paths:
+        - crates/yaml_safe/
+      carryforward: true
+
+component_management:
+  individual_components:
+    - component_id: mdx-gen
+      name: mdx-gen library
+      paths:
+        - src/**
+    - component_id: yaml-safe
+      name: yaml_safe (vendored)
+      paths:
+        - crates/yaml_safe/**
