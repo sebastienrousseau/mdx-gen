@@ -5,13 +5,14 @@
 //! Syntax highlighting has moved to [`crate::highlight`].
 
 use crate::error::MarkdownError;
-use comrak::nodes::NodeValue;
+use comrak::nodes::{NodeHtmlBlock, NodeValue};
 use regex::Regex;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-// ── Table regexes (cached) ──────────────────────────────────────────
+// ── Table regexes (cached, for legacy process_tables) ───────────────
 
 static TABLE_OPEN_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"<table>").unwrap());
@@ -229,6 +230,55 @@ fn generate_custom_block_html(
     )
 }
 
+// ── AST-level table enhancement ─────────────────────────────────────
+
+/// Walks the comrak AST and replaces `Table` nodes with `HtmlBlock`
+/// nodes containing responsive-wrapped, class-enhanced table HTML.
+///
+/// This eliminates the last regex pass over rendered HTML.
+pub fn enhance_table_nodes<'a>(
+    root: comrak::nodes::Node<'a>,
+    arena: &'a comrak::Arena<'a>,
+    options: &comrak::Options,
+) {
+    // Collect table nodes first to avoid borrow issues during mutation
+    let table_nodes: Vec<comrak::nodes::Node<'a>> = root
+        .descendants()
+        .filter(|node| {
+            matches!(node.data.borrow().value, NodeValue::Table(_))
+        })
+        .collect();
+
+    for table_node in table_nodes {
+        // Render this table subtree to HTML
+        let mut table_html = String::new();
+        if comrak::format_html(table_node, options, &mut table_html)
+            .is_err()
+        {
+            continue;
+        }
+
+        // Apply the responsive wrapper and alignment classes
+        let enhanced = process_tables(&table_html);
+
+        // Create a replacement HtmlBlock node
+        let start = comrak::nodes::LineColumn { line: 0, column: 0 };
+        let replacement = arena.alloc(comrak::nodes::AstNode::new(
+            RefCell::new(comrak::nodes::Ast::new(
+                NodeValue::HtmlBlock(NodeHtmlBlock {
+                    block_type: 6, // generic block
+                    literal: enhanced,
+                }),
+                start,
+            )),
+        ));
+
+        // Insert replacement and remove original
+        table_node.insert_before(replacement);
+        table_node.detach();
+    }
+}
+
 // ── Legacy string-level custom block processing ─────────────────────
 
 /// Processes custom blocks in an HTML string.
@@ -323,5 +373,27 @@ mod tests {
         let input = "<table><tr><td>A</td></tr></table>\n<table><tr><td>B</td></tr></table>";
         let processed = process_tables(input);
         assert_eq!(processed.matches("table-responsive").count(), 2);
+    }
+
+    #[test]
+    fn test_unknown_block_type_from_str() {
+        let result = CustomBlockType::from_str("unknown");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("Unknown block type: unknown"),
+            "Error message should contain the unknown type"
+        );
+    }
+
+    #[test]
+    fn test_unknown_block_type_from_str_various() {
+        for name in ["foobar", "alert", "danger", "success", ""] {
+            let result = CustomBlockType::from_str(name);
+            assert!(
+                result.is_err(),
+                "'{name}' should not parse as a valid block type"
+            );
+        }
     }
 }

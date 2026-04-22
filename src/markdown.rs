@@ -17,12 +17,14 @@
 
 use crate::error::MarkdownError;
 use crate::extensions::{
-    process_custom_block_nodes, process_tables, CustomBlockConfig,
+    enhance_table_nodes, process_custom_block_nodes, CustomBlockConfig,
 };
 use comrak::options::{Plugins, RenderPlugins};
-use comrak::{markdown_to_html_with_plugins, Arena, Options};
+use comrak::{Arena, Options};
 use log::{debug, info, warn};
+use std::collections::HashSet;
 use std::fmt;
+use std::sync::LazyLock;
 
 #[cfg(feature = "syntax_highlighting")]
 use crate::highlight::SyntectAdapter;
@@ -54,6 +56,12 @@ pub struct MarkdownOptions<'a> {
     pub custom_block_config: CustomBlockConfig,
     /// Maximum input size in bytes. `0` means no limit.
     pub max_input_size: usize,
+    /// Enable automatic `id` attributes on headings for anchor links.
+    ///
+    /// When `Some(prefix)`, headings get `id="prefix-slug"` attributes.
+    /// Use `Some("")` for bare `id="slug"` without a prefix.
+    /// `None` disables header IDs (default).
+    pub header_ids: Option<String>,
 }
 
 impl<'a> Default for MarkdownOptions<'a> {
@@ -67,6 +75,7 @@ impl<'a> Default for MarkdownOptions<'a> {
             allow_unsafe_html: true,
             custom_block_config: CustomBlockConfig::default(),
             max_input_size: DEFAULT_MAX_INPUT_SIZE,
+            header_ids: None,
         }
     }
 }
@@ -134,6 +143,18 @@ impl<'a> MarkdownOptions<'a> {
         self
     }
 
+    /// Enables automatic `id` attributes on headings.
+    ///
+    /// Pass `""` for bare slugs, or a prefix like `"user-content-"`
+    /// to namespace them (GitHub-style).
+    pub fn with_header_ids(
+        mut self,
+        prefix: impl Into<String>,
+    ) -> Self {
+        self.header_ids = Some(prefix.into());
+        self
+    }
+
     /// Validates that options are consistent.
     pub fn validate(&self) -> Result<(), String> {
         if self.enable_enhanced_tables
@@ -164,6 +185,7 @@ impl fmt::Debug for MarkdownOptions<'_> {
             .field("syntax_theme", &self.syntax_theme)
             .field("allow_unsafe_html", &self.allow_unsafe_html)
             .field("max_input_size", &self.max_input_size)
+            .field("header_ids", &self.header_ids)
             .finish()
     }
 }
@@ -222,6 +244,11 @@ pub fn process_markdown(
     // at the end if the caller wants safety.
     comrak_opts.render.r#unsafe = true;
 
+    // Wire header_ids into comrak's extension
+    if let Some(ref prefix) = options.header_ids {
+        comrak_opts.extension.header_ids = Some(prefix.clone());
+    }
+
     // ── 3. Parse → AST ─────────────────────────────────────────
     let arena = Arena::new();
     let root = comrak::parse_document(&arena, content, &comrak_opts);
@@ -230,6 +257,10 @@ pub fn process_markdown(
     if options.enable_custom_blocks {
         debug!("Processing custom blocks at AST level");
         process_custom_block_nodes(root, &options.custom_block_config);
+    }
+    if options.enable_enhanced_tables {
+        debug!("Enhancing tables at AST level");
+        enhance_table_nodes(root, &arena, &comrak_opts);
     }
 
     // ── 5. Render to HTML ───────────────────────────────────────
@@ -252,13 +283,7 @@ pub fn process_markdown(
     #[cfg(not(feature = "syntax_highlighting"))]
     let plugins = Plugins::default();
 
-    let mut html =
-        markdown_to_html_with_plugins(content, &comrak_opts, &plugins);
-
-    // We rendered from *content* (not AST) above, but custom block
-    // transforms are on the AST. Re-render from the AST so
-    // transforms take effect.
-    html.clear();
+    let mut html = String::new();
     comrak::format_html_with_plugins(
         root,
         &comrak_opts,
@@ -266,12 +291,6 @@ pub fn process_markdown(
         &plugins,
     )
     .map_err(|e| MarkdownError::RenderError(e.to_string()))?;
-
-    // ── 6. Enhance tables ───────────────────────────────────────
-    if options.enable_enhanced_tables {
-        debug!("Processing enhanced tables");
-        html = process_tables(&html);
-    }
 
     // ── 7. Sanitize ─────────────────────────────────────────────
     if !options.allow_unsafe_html {
@@ -285,15 +304,53 @@ pub fn process_markdown(
 
 // ── HTML sanitization ───────────────────────────────────────────────
 
+/// Pre-generated `language-*` class names for code elements,
+/// allocated once and reused across all sanitize calls.
+static CODE_LANG_CLASSES: LazyLock<HashSet<String>> =
+    LazyLock::new(|| {
+        [
+            "rust",
+            "python",
+            "javascript",
+            "typescript",
+            "java",
+            "c",
+            "cpp",
+            "csharp",
+            "go",
+            "ruby",
+            "swift",
+            "kotlin",
+            "php",
+            "html",
+            "css",
+            "sql",
+            "bash",
+            "shell",
+            "json",
+            "yaml",
+            "toml",
+            "xml",
+            "markdown",
+            "plaintext",
+            "text",
+        ]
+        .iter()
+        .map(|lang| format!("language-{lang}"))
+        .collect()
+    });
+
 /// Sanitizes HTML output, stripping dangerous tags while preserving
 /// safe structural markup that this library generates.
 fn sanitize_html(html: &str) -> String {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
+
+    let code_class_refs: HashSet<&str> =
+        CODE_LANG_CLASSES.iter().map(|s| s.as_str()).collect();
 
     let mut allowed_classes: HashMap<&str, HashSet<&str>> =
         HashMap::new();
 
-    // Allow our generated alert classes on divs
     allowed_classes.insert(
         "div",
         [
@@ -309,61 +366,28 @@ fn sanitize_html(html: &str) -> String {
         .into_iter()
         .collect(),
     );
-
-    // Allow table classes
     allowed_classes.insert("table", ["table"].into_iter().collect());
-
-    // Allow alignment classes on td
     allowed_classes.insert(
         "td",
         ["text-left", "text-center", "text-right"]
             .into_iter()
             .collect(),
     );
-
-    // Allow common language classes on code elements.
-    // We generate a broad set covering popular languages.
-    let mut code_classes: HashSet<&str> = HashSet::new();
-    for lang in [
-        "rust",
-        "python",
-        "javascript",
-        "typescript",
-        "java",
-        "c",
-        "cpp",
-        "csharp",
-        "go",
-        "ruby",
-        "swift",
-        "kotlin",
-        "php",
-        "html",
-        "css",
-        "sql",
-        "bash",
-        "shell",
-        "json",
-        "yaml",
-        "toml",
-        "xml",
-        "markdown",
-        "plaintext",
-        "text",
-    ] {
-        code_classes.insert(
-            // Leak is fine — these are static strings
-            Box::leak(format!("language-{lang}").into_boxed_str()),
-        );
-    }
-    allowed_classes.insert("code", code_classes);
+    allowed_classes.insert("code", code_class_refs);
 
     ammonia::Builder::default()
         .add_tags(["div", "pre", "code", "span", "input"])
-        .add_tag_attributes("div", &["role"])
+        .add_tag_attributes("div", &["role", "id"])
         .add_tag_attributes("td", &["align"])
         .add_tag_attributes("th", &["align"])
         .add_tag_attributes("input", &["type", "checked", "disabled"])
+        .add_tag_attributes("h1", &["id"])
+        .add_tag_attributes("h2", &["id"])
+        .add_tag_attributes("h3", &["id"])
+        .add_tag_attributes("h4", &["id"])
+        .add_tag_attributes("h5", &["id"])
+        .add_tag_attributes("h6", &["id"])
+        .add_tag_attributes("a", &["id"])
         .add_generic_attributes(["style"])
         .allowed_classes(allowed_classes)
         .clean(html)
@@ -573,5 +597,105 @@ fn main() {
         opts.render.r#unsafe = true;
         let options = MarkdownOptions::new().with_comrak_options(opts);
         assert!(options.allow_unsafe_html);
+    }
+
+    #[test]
+    fn test_markdown_options_debug_impl() {
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(true)
+            .with_syntax_highlighting(false)
+            .with_enhanced_tables(true)
+            .with_custom_theme("InspiredGitHub".to_string())
+            .with_unsafe_html(false)
+            .with_max_input_size(2048);
+
+        let debug_output = format!("{:?}", options);
+        assert!(debug_output.contains("MarkdownOptions"));
+        assert!(debug_output.contains("enable_custom_blocks: true"));
+        assert!(
+            debug_output.contains("enable_syntax_highlighting: false")
+        );
+        assert!(debug_output.contains("enable_enhanced_tables: true"));
+        assert!(debug_output.contains("InspiredGitHub"));
+        assert!(debug_output.contains("allow_unsafe_html: false"));
+        assert!(debug_output.contains("max_input_size: 2048"));
+    }
+
+    #[test]
+    fn test_header_ids() {
+        let markdown = "# Hello World\n## Sub Section";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_header_ids("")
+            .with_unsafe_html(true);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            html.contains("id=\"hello-world\""),
+            "H1 should have id attribute: {html}"
+        );
+        assert!(
+            html.contains("id=\"sub-section\""),
+            "H2 should have id attribute: {html}"
+        );
+    }
+
+    #[test]
+    fn test_header_ids_with_prefix() {
+        let markdown = "# Title";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_header_ids("user-content-")
+            .with_unsafe_html(true);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            html.contains("id=\"user-content-title\""),
+            "Should have prefixed id: {html}"
+        );
+    }
+
+    #[test]
+    fn test_header_ids_survive_sanitization() {
+        let markdown = "# Hello World";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_header_ids("")
+            .with_unsafe_html(false);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            html.contains("id=\"hello-world\""),
+            "Header id should survive ammonia sanitization: {html}"
+        );
+    }
+
+    #[test]
+    fn test_ast_table_enhancement() {
+        let markdown =
+            "| H1 | H2 |\n|:---|---:|\n| L | R |\n\nParagraph\n\n| A | B |\n|---|---|\n| C | D |";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_comrak_options({
+                let mut opts = Options::default();
+                opts.extension.table = true;
+                opts
+            })
+            .with_unsafe_html(true);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        // Both tables should be wrapped
+        assert_eq!(
+            html.matches("table-responsive").count(),
+            2,
+            "Both tables should get responsive wrapper: {html}"
+        );
+        assert!(
+            html.contains("text-right"),
+            "Right-aligned cells should have class"
+        );
     }
 }

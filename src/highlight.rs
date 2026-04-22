@@ -209,4 +209,92 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().contains("<span"));
     }
+
+    #[test]
+    fn test_write_pre_tag_with_attributes() {
+        let adapter = SyntectAdapter::new(None);
+        let mut output = String::new();
+        let mut attrs = HashMap::new();
+        attrs.insert("class", Cow::Borrowed("highlight"));
+        attrs.insert("data-lang", Cow::Borrowed("rust"));
+        adapter.write_pre_tag(&mut output, attrs).unwrap();
+        assert!(output.starts_with("<pre"));
+        assert!(output.ends_with('>'));
+        assert!(output.contains("class=\"highlight\""));
+        assert!(output.contains("data-lang=\"rust\""));
+    }
+
+    #[test]
+    fn test_write_pre_tag_no_attributes() {
+        let adapter = SyntectAdapter::new(None);
+        let mut output = String::new();
+        adapter.write_pre_tag(&mut output, HashMap::new()).unwrap();
+        assert_eq!(output, "<pre>");
+    }
+
+    #[test]
+    fn test_write_code_tag_with_attributes() {
+        let adapter = SyntectAdapter::new(None);
+        let mut output = String::new();
+        let mut attrs = HashMap::new();
+        attrs.insert("class", Cow::Borrowed("language-rust"));
+        adapter.write_code_tag(&mut output, attrs).unwrap();
+        assert!(output.starts_with("<code"));
+        assert!(output.ends_with('>'));
+        assert!(output.contains("class=\"language-rust\""));
+    }
+
+    #[test]
+    fn test_write_code_tag_skips_empty_attributes() {
+        let adapter = SyntectAdapter::new(None);
+        let mut output = String::new();
+        let mut attrs = HashMap::new();
+        attrs.insert("class", Cow::Borrowed(""));
+        attrs.insert("id", Cow::Borrowed("my-code"));
+        adapter.write_code_tag(&mut output, attrs).unwrap();
+        // Empty "class" value should be skipped
+        assert!(!output.contains("class"));
+        // Non-empty "id" should be present
+        assert!(output.contains("id=\"my-code\""));
+    }
+
+    #[test]
+    fn test_write_code_tag_no_attributes() {
+        let adapter = SyntectAdapter::new(None);
+        let mut output = String::new();
+        adapter.write_code_tag(&mut output, HashMap::new()).unwrap();
+        assert_eq!(output, "<code>");
+    }
+
+    #[test]
+    fn test_write_pre_tag_escapes_attribute_values() {
+        let adapter = SyntectAdapter::new(None);
+        let mut output = String::new();
+        let mut attrs = HashMap::new();
+        attrs.insert("data-info", Cow::Borrowed("a\"b"));
+        adapter.write_pre_tag(&mut output, attrs).unwrap();
+        // The double quote inside the value should be escaped
+        assert!(!output.contains("a\"b"));
+        assert!(output.contains("data-info="));
+    }
+
+    #[test]
+    fn test_write_highlighted_no_lang() {
+        let adapter = SyntectAdapter::new(None);
+        let mut output = String::new();
+        adapter
+            .write_highlighted(&mut output, None, "plain text")
+            .unwrap();
+        assert!(!output.is_empty());
+    }
+
+    #[test]
+    fn test_standalone_highlighting_unknown_language() {
+        // Unknown language should fall back to plain text, not error
+        let result = apply_syntax_highlighting(
+            "hello world",
+            "nonexistent-language-xyz",
+        );
+        assert!(result.is_ok());
+    }
 }

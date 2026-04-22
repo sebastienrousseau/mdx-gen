@@ -2,14 +2,13 @@ coverage:
   status:
     project:
       default:
-        target: 80%
+        target: 90%
         threshold: 5%
     patch:
       default:
-        target: 75%
+        target: 85%
         threshold: 10%
 
-  # Separate targets for the main library vs vendored deps
   flags:
     mdx-gen:
       paths:
