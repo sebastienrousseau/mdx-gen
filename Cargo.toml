@@ -92,7 +92,7 @@ yaml_support = ["serde_yml"]
 tempfile = "3.13"
 assert_fs = "1.1"
 predicates = "3.1"
-criterion = "0.5"
+criterion = "0.8"
 
 [[bench]]
 name = "markdown_benchmark"
