@@ -29,6 +29,15 @@ pub struct Location {
 }
 
 impl Location {
+    /// Creates a new `Location`.
+    pub fn new(index: usize, line: usize, column: usize) -> Self {
+        Self {
+            index,
+            line,
+            column,
+        }
+    }
+
     /// Returns the byte index where the error occurred.
     pub fn index(&self) -> usize {
         self.index
