@@ -1,8 +1,8 @@
 [package]
-name = "serde_yml"
+name = "yaml_safe"
 version = "0.1.0"
 edition = "2021"
-description = "Local safe YAML serde implementation"
+description = "Pure-Rust YAML serde implementation (no unsafe, no libyml)"
 license = "MIT OR Apache-2.0"
 publish = false
 

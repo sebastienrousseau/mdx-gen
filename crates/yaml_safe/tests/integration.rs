@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use serde::{Deserialize, Serialize};
-use serde_yml::{
+use yaml_safe::{
     from_reader, from_slice, from_str, from_value, to_string, to_value,
     to_writer, Mapping, Number, Tag, TaggedValue, Value,
 };

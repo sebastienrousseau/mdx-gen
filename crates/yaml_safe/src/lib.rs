@@ -22,5 +22,6 @@ pub use error::{Error, Location, Result};
 pub use mapping::Mapping;
 pub use number::Number;
 pub use ser::{to_string, to_writer, Serializer, State};
+pub use serde::{Deserialize, Serialize};
 pub use value::tagged::{Tag, TaggedValue};
 pub use value::{from_value, to_value, Sequence, Value};

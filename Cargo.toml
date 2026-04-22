@@ -4,7 +4,7 @@
 # -----------------------------------------------------------------------------
 
 [workspace]
-members = [".", "crates/serde_yml"]
+members = [".", "crates/yaml_safe"]
 resolver = "2"
 
 [package]
@@ -51,7 +51,7 @@ comrak = { version = "0.50", default-features = false }
 html-escape = "0.2"
 log = "0.4"
 regex = "1.12"
-serde_yml = { path = "crates/serde_yml", optional = true }
+yaml_safe = { path = "crates/yaml_safe", optional = true }
 syntect = { version = "5.2", optional = true, default-features = false, features = ["default-themes", "default-syntaxes", "html", "regex-fancy"] }
 thiserror = "2.0"
 
@@ -74,7 +74,7 @@ default = ["syntax_highlighting"]
 syntax_highlighting = ["syntect"]
 
 # Enable YAML support
-yaml_support = ["serde_yml"]
+yaml_support = ["yaml_safe"]
 
 # -----------------------------------------------------------------------------
 # Development Dependencies

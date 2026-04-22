@@ -45,12 +45,12 @@ pub fn extract_frontmatter(content: &str) -> (Option<&str>, &str) {
     }
 }
 
-/// Parses a YAML frontmatter string into a `serde_yml::Value`.
+/// Parses a YAML frontmatter string into a `yaml_safe::Value`.
 #[cfg(feature = "yaml_support")]
 pub fn parse_frontmatter(
     yaml: &str,
-) -> Result<serde_yml::Value, MarkdownError> {
-    serde_yml::from_str(yaml)
+) -> Result<yaml_safe::Value, MarkdownError> {
+    yaml_safe::from_str(yaml)
         .map_err(|e| MarkdownError::FrontmatterError(e.to_string()))
 }
 
@@ -58,9 +58,9 @@ pub fn parse_frontmatter(
 #[cfg(feature = "yaml_support")]
 pub fn parse_frontmatter_as<T>(yaml: &str) -> Result<T, MarkdownError>
 where
-    T: serde_yml::de::DeserializeOwned,
+    T: for<'de> yaml_safe::Deserialize<'de>,
 {
-    serde_yml::from_str(yaml)
+    yaml_safe::from_str(yaml)
         .map_err(|e| MarkdownError::FrontmatterError(e.to_string()))
 }
 
@@ -105,9 +105,9 @@ mod tests {
     fn test_parse_frontmatter() {
         let yaml = "title: Hello\nauthor: World";
         let value = parse_frontmatter(yaml).unwrap();
-        assert_eq!(
-            value["title"],
-            serde_yml::Value::String("Hello".into())
-        );
+        let mapping = value.as_mapping().expect("should be mapping");
+        let key = yaml_safe::Value::String("title".into());
+        let title = mapping.get(&key).expect("should have title");
+        assert_eq!(*title, yaml_safe::Value::String("Hello".into()));
     }
 }
