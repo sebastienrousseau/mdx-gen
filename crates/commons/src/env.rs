@@ -200,7 +200,7 @@ pub fn get_list(key: &str, delimiter: &str) -> Vec<String> {
 /// Check if an environment variable is set (and non-empty).
 #[must_use]
 pub fn is_set(key: &str) -> bool {
-    env::var(key).map(|v| !v.is_empty()).unwrap_or(false)
+    env::var(key).is_ok_and(|v| !v.is_empty())
 }
 
 /// Get the current environment name (development, staging, production).
