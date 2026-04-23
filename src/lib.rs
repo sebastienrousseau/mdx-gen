@@ -45,9 +45,11 @@ pub use highlight::apply_syntax_highlighting;
 #[cfg(feature = "syntax_highlighting")]
 pub use highlight::theme_css;
 
+pub use extensions::collect_headings;
 pub use extensions::ColumnAlignment;
 pub use extensions::CustomBlockConfig;
 pub use extensions::CustomBlockType;
+pub use extensions::Heading;
 
 /// Processes a Markdown string and converts it into HTML.
 ///
@@ -80,6 +82,14 @@ pub use markdown::process_markdown;
 /// writes the output through a caller-provided writer instead of
 /// allocating a `String`.
 pub use markdown::process_markdown_to_writer;
+
+/// Processes Markdown and returns both the rendered HTML and a
+/// document-order list of [`Heading`]s suitable for building a
+/// table of contents.
+pub use markdown::process_markdown_with_toc;
+
+/// Streaming variant of [`process_markdown_with_toc`].
+pub use markdown::process_markdown_with_toc_to_writer;
 
 pub use markdown::MarkdownOptions;
 pub use markdown::SanitizerConfig;

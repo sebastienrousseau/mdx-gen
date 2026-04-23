@@ -12,6 +12,71 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
+// ── Headings / table-of-contents ────────────────────────────────────
+
+/// A single heading discovered in a Markdown document.
+///
+/// Returned by [`collect_headings`] and by
+/// [`crate::process_markdown_with_toc`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Heading {
+    /// Heading level (1-6 for ATX, 1-2 for setext).
+    pub level: u8,
+    /// Plain-text content of the heading (markup stripped).
+    pub text: String,
+    /// The anchor id that comrak emits for this heading. Computed
+    /// with [`comrak::Anchorizer`] so it matches the `id="…"` value
+    /// produced when `MarkdownOptions::header_ids` is set.
+    pub id: String,
+}
+
+/// Walks the AST and returns one [`Heading`] per heading node, in
+/// document order.
+///
+/// `prefix` mirrors `MarkdownOptions::header_ids`:
+/// * `None` or `Some("")` → bare slug (`"introduction"`).
+/// * `Some(p)` → `format!("{p}{slug}")` (`"user-content-introduction"`).
+///
+/// Uses comrak's own `Anchorizer` so dedup behaviour (`-1`, `-2`
+/// suffixes for repeated headings) matches the rendered HTML.
+pub fn collect_headings<'a>(
+    root: comrak::nodes::Node<'a>,
+    prefix: Option<&str>,
+) -> Vec<Heading> {
+    let mut anchorizer = comrak::Anchorizer::new();
+    let mut out = Vec::new();
+    for node in root.descendants() {
+        let level = match node.data.borrow().value {
+            NodeValue::Heading(h) => h.level,
+            _ => continue,
+        };
+        let text = extract_text(node);
+        let slug = anchorizer.anchorize(&text);
+        let id = match prefix {
+            Some(p) if !p.is_empty() => format!("{p}{slug}"),
+            _ => slug,
+        };
+        out.push(Heading { level, text, id });
+    }
+    out
+}
+
+/// Recursively concatenates the text content of a node's subtree,
+/// matching what comrak renders inside `<h*>` tags (text, inline
+/// code, image alt text). Raw inline HTML is skipped.
+fn extract_text<'a>(node: comrak::nodes::Node<'a>) -> String {
+    let mut buf = String::new();
+    for d in node.descendants() {
+        match &d.data.borrow().value {
+            NodeValue::Text(t) => buf.push_str(t),
+            NodeValue::Code(c) => buf.push_str(&c.literal),
+            NodeValue::Image(img) => buf.push_str(&img.title),
+            _ => {}
+        }
+    }
+    buf
+}
+
 // ── Table regexes (cached, for legacy process_tables) ───────────────
 //
 // Opening and closing `<table>` tags are literal substrings, handled

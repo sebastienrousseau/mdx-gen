@@ -17,7 +17,8 @@
 
 use crate::error::MarkdownError;
 use crate::extensions::{
-    enhance_table_nodes, process_custom_block_nodes, CustomBlockConfig,
+    collect_headings, enhance_table_nodes, process_custom_block_nodes,
+    CustomBlockConfig, Heading,
 };
 use comrak::options::{Plugins, RenderPlugins};
 use comrak::{Arena, Options};
@@ -339,6 +340,60 @@ pub fn process_markdown_to_writer<W: Write>(
     writer: &mut W,
     options: &MarkdownOptions,
 ) -> Result<(), MarkdownError> {
+    pipeline(content, writer, options, None)
+}
+
+/// Processes Markdown and returns both the rendered HTML and a
+/// document-order table of contents.
+///
+/// Each [`Heading`] carries the level, the plain-text content, and
+/// the anchor id that comrak emits for that heading. To make those
+/// ids actually appear in the rendered HTML, set
+/// [`MarkdownOptions::header_ids`] (the same prefix is reflected in
+/// `Heading::id`).
+///
+/// # Errors
+///
+/// Mirrors [`process_markdown`].
+pub fn process_markdown_with_toc(
+    content: &str,
+    options: &MarkdownOptions,
+) -> Result<(String, Vec<Heading>), MarkdownError> {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut toc = Vec::new();
+    pipeline(content, &mut buf, options, Some(&mut toc))?;
+    let html = String::from_utf8(buf).map_err(|e| {
+        MarkdownError::RenderError(format!(
+            "non-UTF-8 output from pipeline: {e}"
+        ))
+    })?;
+    Ok((html, toc))
+}
+
+/// Streams processed HTML to `writer` and returns the table of
+/// contents collected during the AST walk.
+///
+/// Same shape as [`process_markdown_to_writer`] but with the toc
+/// metadata returned alongside the IO result.
+pub fn process_markdown_with_toc_to_writer<W: Write>(
+    content: &str,
+    writer: &mut W,
+    options: &MarkdownOptions,
+) -> Result<Vec<Heading>, MarkdownError> {
+    let mut toc = Vec::new();
+    pipeline(content, writer, options, Some(&mut toc))?;
+    Ok(toc)
+}
+
+/// Internal pipeline shared by every public entry point. When
+/// `toc_out` is `Some`, headings are collected during the AST pass
+/// using [`collect_headings`].
+fn pipeline<W: Write>(
+    content: &str,
+    writer: &mut W,
+    options: &MarkdownOptions,
+    toc_out: Option<&mut Vec<Heading>>,
+) -> Result<(), MarkdownError> {
     info!("Starting markdown processing");
     debug!("Markdown options: {:?}", options);
 
@@ -377,6 +432,14 @@ pub fn process_markdown_to_writer<W: Write>(
     if options.enable_custom_blocks {
         debug!("Processing custom blocks at AST level");
         process_custom_block_nodes(root, &options.custom_block_config);
+    }
+    if let Some(toc) = toc_out {
+        // Collect after custom-block transforms (which may add
+        // structural divs) but before table enhancement (which
+        // detaches table nodes — irrelevant to headings, but keeps
+        // the heading walk on a stable subtree).
+        debug!("Collecting headings for table of contents");
+        *toc = collect_headings(root, options.header_ids.as_deref());
     }
     if options.enable_enhanced_tables {
         debug!("Enhancing tables at AST level");
@@ -1097,6 +1160,133 @@ fn main() {
         );
         // The div itself is still allowed; only the attribute goes.
         assert!(html.contains("<div"), "div tag dropped: {html}");
+    }
+
+    // ── Table of contents ───────────────────────────────────────
+
+    #[test]
+    fn test_toc_collects_headings_in_document_order() {
+        let markdown = "\
+# First
+Some text.
+
+## Second-A
+More text.
+
+## Second-B
+
+# Third\n";
+
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false);
+
+        let (_html, toc) =
+            process_markdown_with_toc(markdown, &options).unwrap();
+        let levels: Vec<u8> = toc.iter().map(|h| h.level).collect();
+        let texts: Vec<&str> =
+            toc.iter().map(|h| h.text.as_str()).collect();
+        assert_eq!(levels, vec![1, 2, 2, 1]);
+        assert_eq!(
+            texts,
+            vec!["First", "Second-A", "Second-B", "Third"]
+        );
+    }
+
+    #[test]
+    fn test_toc_ids_match_rendered_html() {
+        // With header_ids enabled, the rendered HTML must contain
+        // an id matching every Heading::id we report.
+        let markdown = "# Hello World\n\n## A Second Heading\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_header_ids("");
+
+        let (html, toc) =
+            process_markdown_with_toc(markdown, &options).unwrap();
+        assert_eq!(toc.len(), 2);
+        for h in &toc {
+            let needle = format!("id=\"{}\"", h.id);
+            assert!(
+                html.contains(&needle),
+                "ToC id {:?} not found in HTML: {}",
+                h.id,
+                html
+            );
+        }
+    }
+
+    #[test]
+    fn test_toc_prefix_propagates() {
+        let markdown = "# Intro\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_header_ids("user-content-");
+
+        let (html, toc) =
+            process_markdown_with_toc(markdown, &options).unwrap();
+        assert_eq!(toc.len(), 1);
+        assert_eq!(toc[0].id, "user-content-intro");
+        assert!(html.contains("id=\"user-content-intro\""));
+    }
+
+    #[test]
+    fn test_toc_dedup_with_repeated_headings() {
+        let markdown = "# Notes\n## Notes\n### Notes\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_header_ids("");
+
+        let (_html, toc) =
+            process_markdown_with_toc(markdown, &options).unwrap();
+        let ids: Vec<&str> =
+            toc.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(ids, vec!["notes", "notes-1", "notes-2"]);
+    }
+
+    #[test]
+    fn test_toc_empty_document() {
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false);
+        let (html, toc) =
+            process_markdown_with_toc("", &options).unwrap();
+        assert!(toc.is_empty());
+        assert!(html.trim().is_empty());
+    }
+
+    #[test]
+    fn test_toc_writer_variant_writes_html_and_returns_toc() {
+        let markdown = "# Title\n\n## Sub\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false);
+
+        let mut buf: Vec<u8> = Vec::new();
+        let toc = process_markdown_with_toc_to_writer(
+            markdown, &mut buf, &options,
+        )
+        .unwrap();
+        let html = String::from_utf8(buf).unwrap();
+        assert!(html.contains("<h1>Title</h1>"));
+        assert!(html.contains("<h2>Sub</h2>"));
+        assert_eq!(toc.len(), 2);
+    }
+
+    #[test]
+    fn test_toc_extracts_inline_code_text() {
+        let markdown = "# Using `&str` types\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false);
+
+        let (_html, toc) =
+            process_markdown_with_toc(markdown, &options).unwrap();
+        assert_eq!(toc.len(), 1);
+        assert_eq!(toc[0].text, "Using &str types");
     }
 
     #[test]
