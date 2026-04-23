@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 MDX Gen. All rights reserved.
 
-//! Mermaid diagram rendering — flowchart, sequence, class, gantt.
+//! Mermaid diagram rendering — every mermaid 10 diagram kind in
+//! one page, each with a "when to use" blurb.
 //!
 //! Run: `cargo run --example diagrams`
 
@@ -17,36 +18,90 @@ use mdx_gen::{
     hydration_script_html, process_markdown, MarkdownOptions, Options,
 };
 
-// Four different diagram kinds that mermaid itself supports —
-// this demonstrates that every mermaid dialect flows through
-// mdx-gen's client-side hydration path unchanged.
-const SOURCE: &str = r#"# Mermaid showcase
+// Nine diagram kinds mermaid 10 supports, each with a "when to
+// use" blurb lifted from the project brief. Every block below
+// flows through mdx-gen's client-side hydration path unchanged.
+const SOURCE: &str = r##"# Mermaid showcase
+
+mdx-gen recognises fenced `mermaid` code blocks and rewrites them
+into `<pre class="mermaid">…</pre>` containers that the
+client-side [mermaid.js](https://mermaid.js.org/) library
+hydrates into inline SVG at page-load time. Every diagram kind
+mermaid supports flows through the same pipeline — the nine
+below are a tour of that surface.
 
 ## Flowchart
 
+**When to use:** illustrating logic, processes, or decision trees.
+
 ```mermaid
 flowchart LR
-  A[Markdown source] --> B{{mdx-gen pipeline}}
-  B --> C[Sanitized HTML]
-  B --> D[Table of contents]
-  C --> E((Static site))
-  D --> E
+  Start([Start]) --> Check{Input valid?}
+  Check -->|Yes| Process[Process data]
+  Check -->|No| Error[Log error]
+  Process --> Save[(Database)]
+  Save --> Done([Done])
+  Error --> Done
 ```
 
 ## Sequence diagram
 
+**When to use:** documenting interactions between different
+systems or components over time — API traces, message passing,
+request / response flows.
+
 ```mermaid
 sequenceDiagram
-  participant Author
-  participant mdx-gen
-  participant Browser
-  Author->>mdx-gen: Write Markdown with ```mermaid``` blocks
-  mdx-gen-->>Author: Sanitised HTML + hydration script
-  Author->>Browser: Ship page
-  Browser->>Browser: mermaid.run() paints inline SVG
+  autonumber
+  participant Client
+  participant API as API gateway
+  participant DB as Database
+  Client->>+API: POST /orders
+  API->>+DB: INSERT order
+  DB-->>-API: id = 42
+  API-->>-Client: 201 Created
+  Client->>+API: GET /orders/42
+  API->>+DB: SELECT order
+  DB-->>-API: row
+  API-->>-Client: 200 OK
+```
+
+## Entity–Relationship diagram
+
+**When to use:** modelling database schemas and the relationships
+between data entities. Ideal for README-level data-model docs.
+
+```mermaid
+erDiagram
+  CUSTOMER ||--o{ ORDER : places
+  ORDER ||--|{ LINE_ITEM : contains
+  PRODUCT ||--o{ LINE_ITEM : listed_in
+  CUSTOMER {
+    string name
+    string email UK
+  }
+  ORDER {
+    int id PK
+    date placed_at
+    string status
+  }
+  PRODUCT {
+    int sku PK
+    string title
+    decimal price
+  }
+  LINE_ITEM {
+    int order_id FK
+    int sku FK
+    int qty
+  }
 ```
 
 ## Class diagram
+
+**When to use:** object-oriented documentation — classes,
+methods, attributes, and relationships between them. Essential
+for showing system structure.
 
 ```mermaid
 classDiagram
@@ -61,23 +116,105 @@ classDiagram
     -render()
     -sanitize()
   }
-  MarkdownOptions --> Pipeline : configures
+  class DiagramTransform {
+    <<trait>>
+    +apply(ast)
+  }
+  Pipeline --> MarkdownOptions : configures
+  Pipeline ..|> DiagramTransform : uses
 ```
 
-## Gantt
+## State diagram
+
+**When to use:** visualising the states and transitions of an
+object or system — state machines, connection lifecycles, UI
+modes.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Parsing : input arrived
+  Parsing --> Rendering : AST built
+  Rendering --> Sanitizing : HTML produced
+  Sanitizing --> Done : clean
+  Sanitizing --> Failed : rejected
+  Done --> [*]
+  Failed --> Idle : retry
+```
+
+## Gantt chart
+
+**When to use:** project management — tracking task timelines,
+dependencies, and completion status across a release window.
 
 ```mermaid
 gantt
   dateFormat  YYYY-MM-DD
   title       v0.0.3 release runway
   section Core
-  AST pipeline        :done,    p1, 2026-03-15, 7d
-  Sanitizer hardening :done,    p2, after p1, 5d
+  AST pipeline         :done,    p1, 2026-03-15, 7d
+  Sanitizer hardening  :done,    p2, after p1, 5d
   section Polish
-  Examples + CHANGELOG :done,   p3, after p2, 4d
-  Diagrams             :active, p4, after p3, 3d
+  Examples + CHANGELOG :done,    p3, after p2, 4d
+  Diagrams             :active,  p4, after p3, 3d
+  section Launch
+  Tag + publish        :         p5, after p4, 1d
 ```
-"#;
+
+## Git graph
+
+**When to use:** visualising GitHub-style branch history —
+merges, tags, and commit progressions on a release branch.
+
+```mermaid
+gitGraph
+  commit id: "init"
+  branch feat/v0.0.3
+  checkout feat/v0.0.3
+  commit id: "AST pipeline"
+  commit id: "Sanitizer"
+  commit id: "ToC"
+  checkout main
+  merge feat/v0.0.3 tag: "v0.0.3"
+  commit id: "changelog"
+```
+
+## User journey
+
+**When to use:** mapping the steps a user takes to complete a
+task. Each step carries a satisfaction score (1–5) and the set
+of actors involved.
+
+```mermaid
+journey
+  title Author writes and ships a Markdown page
+  section Write
+    Open editor         : 5: Author
+    Draft content       : 4: Author
+    Add mermaid block   : 4: Author
+  section Build
+    Run mdx-gen         : 5: Author
+    Inspect HTML        : 4: Author
+  section Ship
+    Deploy to CDN       : 5: Author, Ops
+    Reader loads page   : 5: Reader
+```
+
+## Pie chart
+
+**When to use:** simple visualisations for data distribution —
+test coverage splits, allocation breakdowns, share-of-total
+plots.
+
+```mermaid
+pie showData
+  title Where mdx-gen spends its cycles
+  "Parse"     : 18
+  "Transform" : 22
+  "Render"    : 35
+  "Sanitize"  : 25
+```
+"##;
 
 fn main() {
     support::header("mdx-gen -- diagrams (mermaid)");
@@ -108,9 +245,10 @@ fn main() {
     support::task_with_output("Verify mermaid containers", || {
         let n = fragment.matches("<pre class=\"mermaid\">").count();
         vec![
-            format!("containers found: {n}"),
-            format!("hydration script embedded inline: yes"),
-            format!("surviving sanitizer: yes (unsafe_html = false)"),
+            format!("containers found : {n} (expected 9)"),
+            "hydration script  : embedded inline".to_string(),
+            "sanitizer         : passed (unsafe_html = false)"
+                .to_string(),
         ]
     });
 
