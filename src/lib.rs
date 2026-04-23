@@ -84,6 +84,16 @@ pub use markdown::process_markdown;
 /// allocating a `String`.
 pub use markdown::process_markdown_to_writer;
 
+/// Extracts plain-text content from Markdown (strips all formatting).
+///
+/// # Example
+/// ```
+/// use mdx_gen::{process_markdown_to_plain_text, MarkdownOptions};
+/// let text = process_markdown_to_plain_text("# Hello\nWorld", &MarkdownOptions::default()).unwrap();
+/// assert_eq!(text, "Hello World");
+/// ```
+pub use markdown::process_markdown_to_plain_text;
+
 /// Processes Markdown and returns both the rendered HTML and a
 /// document-order list of [`Heading`]s suitable for building a
 /// table of contents.

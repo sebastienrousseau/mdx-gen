@@ -385,6 +385,38 @@ pub fn process_markdown_with_toc_to_writer<W: Write>(
     Ok(toc)
 }
 
+/// Extracts plain-text content from Markdown, stripping all
+/// formatting and markup.
+///
+/// This is useful for building search indexes, generating
+/// plain-text excerpts, or calculating reading time.
+///
+/// # Errors
+///
+/// Returns a [`MarkdownError`] if input exceeds the size limit.
+pub fn process_markdown_to_plain_text(
+    content: &str,
+    options: &MarkdownOptions,
+) -> Result<String, MarkdownError> {
+    if options.max_input_size > 0
+        && content.len() > options.max_input_size
+    {
+        return Err(MarkdownError::InputTooLarge {
+            size: content.len(),
+            limit: options.max_input_size,
+        });
+    }
+
+    let arena = Arena::new();
+    let root = comrak::parse_document(
+        &arena,
+        content,
+        &options.comrak_options,
+    );
+
+    Ok(crate::extensions::collect_all_text(root))
+}
+
 /// Internal pipeline shared by every public entry point. When
 /// `toc_out` is `Some`, headings are collected during the AST pass
 /// using [`collect_headings`].
@@ -581,13 +613,13 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
         .add_tag_attributes("h5", &["id"])
         .add_tag_attributes("h6", &["id"])
         .add_tag_attributes("a", &["id"])
+        .allowed_classes(allowed_classes)
         // Syntect's class-based highlighter emits open-ended class
         // names on <span> (one per grammar scope). Whitelisting them
         // individually is impractical, so we allow `class` on <span>
         // with unrestricted values — class attributes are CSS hooks,
         // they cannot execute script.
-        .add_tag_attributes("span", &["class"])
-        .allowed_classes(allowed_classes);
+        .add_tag_attributes("span", &["class", "data-math-style"]);
 }
 
 /// Pre-configured ammonia sanitizer, built once and reused across
@@ -1303,5 +1335,115 @@ More text.
         let html = process_markdown(markdown, &options).unwrap();
         assert!(!html.contains("<script>"));
         assert!(html.contains("alert alert-info"));
+    }
+
+    // ── Plain text extractor ────────────────────────────────────
+
+    #[test]
+    fn test_plain_text_basic() {
+        let md = "# Hello World\n\nA **bold** paragraph.";
+        let text = process_markdown_to_plain_text(
+            md,
+            &MarkdownOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(text, "Hello World A bold paragraph.");
+    }
+
+    #[test]
+    fn test_plain_text_lists_and_code() {
+        let md =
+            "# Title\n\nDesc.\n\n- one\n- two\n\n```\nfn main() {}\n```";
+        let text = process_markdown_to_plain_text(
+            md,
+            &MarkdownOptions::default(),
+        )
+        .unwrap();
+        assert!(text.contains("Title"));
+        assert!(text.contains("Desc."));
+        assert!(text.contains("one"));
+        assert!(text.contains("two"));
+        assert!(text.contains("fn main() {}"));
+        // No words merged into each other.
+        assert!(!text.contains("Titleone"));
+        assert!(!text.contains("onetwo"));
+    }
+
+    #[test]
+    fn test_plain_text_strips_html() {
+        // Raw HTML should NOT appear in the plain-text output.
+        let md = "A <strong>bold</strong> word";
+        let text = process_markdown_to_plain_text(
+            md,
+            &MarkdownOptions::default(),
+        )
+        .unwrap();
+        assert!(!text.contains("<strong>"));
+        assert!(!text.contains("</strong>"));
+        assert!(text.contains("bold"));
+    }
+
+    #[test]
+    fn test_plain_text_respects_input_cap() {
+        let options = MarkdownOptions::new().with_max_input_size(8);
+        let err =
+            process_markdown_to_plain_text(&"a".repeat(64), &options)
+                .unwrap_err();
+        assert!(matches!(err, MarkdownError::InputTooLarge { .. }));
+    }
+
+    // ── Math + footnote sanitizer survival ──────────────────────
+
+    #[test]
+    fn test_math_dollars_survives_sanitizer() {
+        // `extension.math_dollars` renders as
+        // `<span data-math-style="inline">…</span>`. The default
+        // sanitizer must preserve the attribute so a frontend
+        // library (KaTeX, MathJax) can find and render it.
+        let mut comrak = Options::default();
+        comrak.extension.math_dollars = true;
+        let options = MarkdownOptions::new()
+            .with_comrak_options(comrak)
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_syntax_highlighting(false)
+            .with_unsafe_html(false);
+
+        let html =
+            process_markdown("Inline $a^2 + b^2$ math.", &options)
+                .unwrap();
+        assert!(
+            html.contains("data-math-style"),
+            "data-math-style attribute stripped by sanitizer: {html}"
+        );
+    }
+
+    #[test]
+    fn test_footnote_link_survives_sanitizer() {
+        // GFM footnotes emit `<sup><a href="#fn-1" id="fnref-1">`
+        // + a back-reference link. The default sanitizer must
+        // preserve both so footnote navigation works.
+        let mut comrak = Options::default();
+        comrak.extension.footnotes = true;
+        let options = MarkdownOptions::new()
+            .with_comrak_options(comrak)
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_syntax_highlighting(false)
+            .with_unsafe_html(false);
+
+        let md = "Claim[^1].\n\n[^1]: Reason.\n";
+        let html = process_markdown(md, &options).unwrap();
+        assert!(html.contains("<sup"), "missing <sup>: {html}");
+        assert!(
+            html.contains("href=\"#fn-1\"")
+                || html.contains("href=\"#fn1\""),
+            "missing forward link: {html}"
+        );
+        assert!(
+            html.contains("href=\"#fnref-1\"")
+                || html.contains("href=\"#fnref1\""),
+            "missing back-reference link: {html}"
+        );
     }
 }

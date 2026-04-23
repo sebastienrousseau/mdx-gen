@@ -61,6 +61,48 @@ pub fn collect_headings<'a>(
     out
 }
 
+/// Recursively concatenates the plain-text content of a node's subtree,
+/// stripping all Markdown and HTML markup. Blocks are separated by
+/// whitespace to prevent words from merging.
+///
+/// Captures both inline code (`` `foo` ``) and fenced code blocks —
+/// useful for search indexing where readers may query terms that
+/// only appear inside code samples.
+pub fn collect_all_text<'a>(root: comrak::nodes::Node<'a>) -> String {
+    let mut buf = String::new();
+    for d in root.descendants() {
+        match &d.data.borrow().value {
+            NodeValue::Text(t) => buf.push_str(t),
+            NodeValue::Code(c) => buf.push_str(&c.literal),
+            NodeValue::CodeBlock(cb) => {
+                if !buf.is_empty() && !buf.ends_with(' ') {
+                    buf.push(' ');
+                }
+                buf.push_str(&cb.literal);
+            }
+            NodeValue::SoftBreak | NodeValue::LineBreak => {
+                if !buf.is_empty() && !buf.ends_with(' ') {
+                    buf.push(' ');
+                }
+            }
+            // Ensure space between structural elements
+            NodeValue::Paragraph
+            | NodeValue::Heading(_)
+            | NodeValue::Item(_)
+            | NodeValue::BlockQuote
+            | NodeValue::Table(_)
+            | NodeValue::TableRow(_)
+            | NodeValue::TableCell => {
+                if !buf.is_empty() && !buf.ends_with(' ') {
+                    buf.push(' ');
+                }
+            }
+            _ => {}
+        }
+    }
+    buf.trim().to_string()
+}
+
 /// Recursively concatenates the text content of a node's subtree,
 /// matching what comrak renders inside `<h*>` tags (text, inline
 /// code, image alt text). Raw inline HTML is skipped.
