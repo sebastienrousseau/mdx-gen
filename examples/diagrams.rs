@@ -17,7 +17,7 @@ use mdx_gen::{
     hydration_script_html, process_markdown, MarkdownOptions, Options,
 };
 
-const SOURCE: &str = r#"# Diagrams showcase
+const SOURCE: &str = r##"# Diagrams showcase
 
 ## Mermaid
 
@@ -30,19 +30,45 @@ graph TD
 
 ## GeoJSON
 
+Three features that actually look like something — a recognisable
+triangle (UK-shaped), a hollow ring, and a small dot — each with
+its own colour via `properties.fill` / `properties.stroke`.
+
 ```geojson
 {
   "type": "FeatureCollection",
   "features": [
     {
       "type": "Feature",
+      "properties": { "fill": "#4a90d9", "stroke": "#1b3d6e" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-6, 58], [-2, 58], [ 2, 55], [ 2, 51], [-1, 50],
+          [-5, 50], [-5, 54], [-8, 55], [-6, 58]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fill": "#f2c14e", "stroke": "#8a6b1e" },
       "geometry": {
         "type": "Polygon",
         "coordinates": [
-          [[-10, 50], [10, 50], [10, 40], [-10, 40], [-10, 50]]
+          [[10, 45], [20, 45], [20, 40], [10, 40], [10, 45]],
+          [[13, 43], [17, 43], [17, 42], [13, 42], [13, 43]]
         ]
-      },
-      "properties": {}
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "fill": "#e94e77", "stroke": "#7a2540" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [ 4, 48], [ 6, 48], [ 6, 46], [ 4, 46], [ 4, 48]
+        ]]
+      }
     }
   ]
 }
@@ -50,14 +76,27 @@ graph TD
 
 ## TopoJSON
 
+A shared-border topology: two rectangles meeting at a common
+arc, as per the TopoJSON spec. The hydrator colours each object
+independently.
+
 ```topojson
 {
   "type": "Topology",
-  "arcs": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+  "arcs": [
+    [[-3, 0], [0, 0], [0, 2], [-3, 2], [-3, 0]],
+    [[ 0, 0], [3, 0], [3, 2], [ 0, 2], [ 0, 0]]
+  ],
   "objects": {
-    "square": {
+    "west": {
       "type": "Polygon",
-      "arcs": [[0]]
+      "arcs": [[0]],
+      "properties": { "fill": "#4a90d9", "stroke": "#1b3d6e" }
+    },
+    "east": {
+      "type": "Polygon",
+      "arcs": [[1]],
+      "properties": { "fill": "#f2c14e", "stroke": "#8a6b1e" }
     }
   }
 }
@@ -65,8 +104,25 @@ graph TD
 
 ## ASCII STL
 
+A full cube (12 triangles, six faces). Phong-shaded via three.js
+so directional lighting gives real 3-D depth cues.
+
 ```stl
 solid cube
+  facet normal 0 0 -1
+    outer loop
+      vertex 0 0 0
+      vertex 1 1 0
+      vertex 1 0 0
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 0 0 0
+      vertex 0 1 0
+      vertex 1 1 0
+    endloop
+  endfacet
   facet normal 0 0 1
     outer loop
       vertex 0 0 1
@@ -81,9 +137,65 @@ solid cube
       vertex 0 1 1
     endloop
   endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 0 0 0
+      vertex 1 0 0
+      vertex 1 0 1
+    endloop
+  endfacet
+  facet normal 0 -1 0
+    outer loop
+      vertex 0 0 0
+      vertex 1 0 1
+      vertex 0 0 1
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 0 1 0
+      vertex 0 1 1
+      vertex 1 1 1
+    endloop
+  endfacet
+  facet normal 0 1 0
+    outer loop
+      vertex 0 1 0
+      vertex 1 1 1
+      vertex 1 1 0
+    endloop
+  endfacet
+  facet normal -1 0 0
+    outer loop
+      vertex 0 0 0
+      vertex 0 0 1
+      vertex 0 1 1
+    endloop
+  endfacet
+  facet normal -1 0 0
+    outer loop
+      vertex 0 0 0
+      vertex 0 1 1
+      vertex 0 1 0
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 1 0 0
+      vertex 1 1 0
+      vertex 1 1 1
+    endloop
+  endfacet
+  facet normal 1 0 0
+    outer loop
+      vertex 1 0 0
+      vertex 1 1 1
+      vertex 1 0 1
+    endloop
+  endfacet
 endsolid cube
 ```
-"#;
+"##;
 
 fn main() {
     support::header("mdx-gen -- diagrams");

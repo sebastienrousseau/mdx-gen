@@ -72,14 +72,27 @@
     svg.setAttribute('xmlns', ns);
     svg.style.maxWidth = '100%';
     svg.style.height = 'auto';
+    // Soft backdrop so boundaries + edges read against the page.
+    const bg = document.createElementNS(ns, 'rect');
+    bg.setAttribute('width', String(w));
+    bg.setAttribute('height', String(h));
+    bg.setAttribute('fill', '#f6f8fa');
+    svg.append(bg);
     for (const f of toFeatureList(geojson)) {
       const d = path(f);
       if (!d) continue;
+      const props = f.properties || {};
       const p = document.createElementNS(ns, 'path');
       p.setAttribute('d', d);
-      p.setAttribute('fill', '#e6e6e6');
-      p.setAttribute('stroke', '#333');
-      p.setAttribute('stroke-width', '0.6');
+      p.setAttribute('fill', props.fill || '#cfd8dc');
+      p.setAttribute('stroke', props.stroke || '#37474f');
+      p.setAttribute(
+        'stroke-width',
+        String(props['stroke-width'] ?? 1.0),
+      );
+      if (props['fill-opacity'] != null) {
+        p.setAttribute('fill-opacity', String(props['fill-opacity']));
+      }
       svg.append(p);
     }
     return svg;
@@ -121,13 +134,25 @@
         try {
           const data = JSON.parse(el.querySelector('pre').textContent);
           const objects = data.objects || {};
-          const key = Object.keys(objects)[0];
-          if (!key) throw new Error('topology has no objects');
-          // topojson.feature returns either a Feature or
-          // FeatureCollection depending on the input; geoSvg's
-          // toFeatureList handles both.
-          const feat = topo.feature(data, objects[key]);
-          el.replaceChildren(geoSvg(d3, feat));
+          const keys = Object.keys(objects);
+          if (keys.length === 0) {
+            throw new Error('topology has no objects');
+          }
+          // Merge every named object into a single Feature
+          // Collection so multi-object topologies render in one
+          // projection. Per-object `properties` flow through to
+          // `geoSvg`, which uses `fill` / `stroke` from them.
+          const features = [];
+          for (const key of keys) {
+            const decoded = topo.feature(data, objects[key]);
+            if (decoded.type === 'FeatureCollection') {
+              features.push(...decoded.features);
+            } else {
+              features.push(decoded);
+            }
+          }
+          const fc = { type: 'FeatureCollection', features };
+          el.replaceChildren(geoSvg(d3, fc));
         } catch (e) { fail(el, 'topojson render', e); }
       }
     }
@@ -151,26 +176,59 @@
           const src = el.querySelector('pre').textContent;
           const loader = new STLLoader();
           const geom = loader.parse(src);
+          // Phong shading needs normals per face group; STLLoader
+          // gives us normals already, but smoothing + recomputing
+          // bounds after recentering improves the look.
           geom.computeBoundingBox();
+          geom.computeVertexNormals();
           const box = geom.boundingBox;
           const size = box.getSize(new THREE.Vector3());
           const center = box.getCenter(new THREE.Vector3());
           geom.translate(-center.x, -center.y, -center.z);
-          const extent = Math.max(size.x, size.y, size.z) || 1;
+          const extent =
+            Math.max(size.x, size.y, size.z) || 1;
+
           const scene = new THREE.Scene();
+          scene.background = new THREE.Color(0xf6f8fa);
+
+          // Iso-style camera so the cube reads as 3-D from the
+          // first frame.
           const cam = new THREE.PerspectiveCamera(
-            45, 1.6, 0.1, extent * 20,
+            35, 640 / 400, 0.1, extent * 20,
           );
-          const d = extent * 2.2;
-          cam.position.set(d, d, d);
+          const d = extent * 2.6;
+          cam.position.set(d, d * 0.9, d);
           cam.lookAt(0, 0, 0);
-          scene.add(new THREE.AmbientLight(0xffffff, 1));
-          const mat = new THREE.MeshBasicMaterial({
-            color: 0x808080,
-            wireframe: false,
+
+          // AmbientLight keeps shadowed faces from going black;
+          // DirectionalLight drives the face-to-face contrast that
+          // makes shape legible. Wireframe overlay kept subtle so
+          // silhouette reads even on flat-shaded faces.
+          scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+          const key = new THREE.DirectionalLight(0xffffff, 0.9);
+          key.position.set(5, 8, 5);
+          scene.add(key);
+          const fill = new THREE.DirectionalLight(0xffffff, 0.35);
+          fill.position.set(-4, -2, -6);
+          scene.add(fill);
+
+          const mat = new THREE.MeshPhongMaterial({
+            color: 0x4a90d9,
+            specular: 0x222222,
+            shininess: 24,
+            flatShading: true,
           });
-          scene.add(new THREE.Mesh(geom, mat));
+          const mesh = new THREE.Mesh(geom, mat);
+          scene.add(mesh);
+
+          const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geom, 30),
+            new THREE.LineBasicMaterial({ color: 0x1b3d6e }),
+          );
+          scene.add(edges);
+
           const renderer = new SVGRenderer();
+          renderer.setQuality('high');
           renderer.setSize(640, 400);
           renderer.render(scene, cam);
           const svg = renderer.domElement;
