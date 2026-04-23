@@ -1,0 +1,48 @@
+# -----------------------------------------------------------------------------
+# mdx-gen-fuzz — libfuzzer-sys harness targets for mdx-gen.
+#
+# Not a member of the parent workspace (see the [workspace] table below); run
+# via `cargo +nightly fuzz run <target>` from this directory. `libfuzzer-sys`
+# is only pulled in here, so the main crate's dependency footprint is
+# unaffected.
+# -----------------------------------------------------------------------------
+
+[package]
+name = "mdx-gen-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.mdx-gen]
+path = ".."
+
+[[bin]]
+name = "process_markdown"
+path = "fuzz_targets/process_markdown.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "custom_blocks"
+path = "fuzz_targets/custom_blocks.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sanitize_roundtrip"
+path = "fuzz_targets/sanitize_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+# Own workspace root so cargo-fuzz does not inherit the parent workspace.
+[workspace]

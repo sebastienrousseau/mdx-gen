@@ -5,6 +5,9 @@
 
 [workspace]
 members = [".", "crates/yaml_safe"]
+# The fuzz/ crate has its own [workspace] table and pulls in
+# libfuzzer-sys, which we don't want in the main build graph.
+exclude = ["fuzz"]
 resolver = "2"
 
 [package]
