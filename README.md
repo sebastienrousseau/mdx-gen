@@ -76,6 +76,36 @@ fn main() {
 
 ---
 
+## Breaking changes in 0.0.3
+
+If you are upgrading from `0.0.2`:
+
+- **Syntax highlighter is now class-based.** Code blocks render as
+  `<span class="…">` tokens instead of inline `style="color:…"`. Generate a
+  matching stylesheet with the new `mdx_gen::theme_css(theme_name)` helper and
+  serve it alongside your HTML. Pre-existing CSS that targeted the old
+  inline-style output will need to switch to syntect's
+  [`ClassStyle::Spaced`](https://docs.rs/syntect/latest/syntect/html/enum.ClassStyle.html)
+  class names.
+
+- **Sanitizer no longer permits `style` on any tag.** With the highlighter
+  no longer emitting inline styles, the global `style` allowance was a pure
+  attack surface (clickjacking via raw HTML). If you need it back for trusted
+  content, use the new `SanitizerConfig::with_generic_attribute("style")`
+  on `MarkdownOptions::with_sanitizer_config`.
+
+- **Frontmatter requires `---` at byte 0.** Leading whitespace before the
+  opening delimiter no longer triggers frontmatter detection — matching
+  Jekyll, Hugo, and most other CommonMark front-matter consumers. Strip
+  any leading whitespace upstream if you need the previous behaviour.
+
+New surfaces in this release: `process_markdown_to_writer`,
+`process_markdown_with_toc`, `process_markdown_with_toc_to_writer`,
+`SanitizerConfig`, `Heading`, `theme_css`, plus a `cargo-fuzz` workspace
+under `fuzz/` for parser hardening.
+
+---
+
 ## Development
 
 ```bash
