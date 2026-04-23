@@ -25,6 +25,7 @@ const EXAMPLES: &[&str] = &[
     "gallery",
     "streaming",
     "pipe",
+    "diagrams",
     // Integrators
     "search",
     "bulk",

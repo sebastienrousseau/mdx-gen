@@ -71,6 +71,15 @@ pub struct MarkdownOptions<'a> {
     /// per call that merges the defaults with the extras declared in
     /// [`SanitizerConfig`].
     pub sanitizer_config: Option<SanitizerConfig>,
+    /// Rewrite fenced code blocks tagged `mermaid`, `geojson`,
+    /// `topojson`, or `stl` into sanitizer-safe containers that a
+    /// client-side JS hydrator (see
+    /// [`crate::hydration_script_html`]) replaces with inline SVG.
+    ///
+    /// Off by default so existing users with plain `mermaid` code
+    /// blocks continue to see syntax-highlighted source. Opt in via
+    /// [`MarkdownOptions::with_diagrams`].
+    pub enable_diagrams: bool,
 }
 
 impl<'a> Default for MarkdownOptions<'a> {
@@ -86,6 +95,7 @@ impl<'a> Default for MarkdownOptions<'a> {
             max_input_size: DEFAULT_MAX_INPUT_SIZE,
             header_ids: None,
             sanitizer_config: None,
+            enable_diagrams: false,
         }
     }
 }
@@ -176,6 +186,15 @@ impl<'a> MarkdownOptions<'a> {
         config: SanitizerConfig,
     ) -> Self {
         self.sanitizer_config = Some(config);
+        self
+    }
+
+    /// Enables or disables diagram code-block rendering (mermaid,
+    /// geojson, topojson, stl). See [`crate::diagrams`] for the
+    /// supported info strings and the client-side hydration
+    /// contract.
+    pub fn with_diagrams(mut self, enable: bool) -> Self {
+        self.enable_diagrams = enable;
         self
     }
 
@@ -520,6 +539,7 @@ impl fmt::Debug for MarkdownOptions<'_> {
             .field("max_input_size", &self.max_input_size)
             .field("header_ids", &self.header_ids)
             .field("sanitizer_config", &self.sanitizer_config)
+            .field("enable_diagrams", &self.enable_diagrams)
             .finish()
     }
 }
@@ -776,6 +796,10 @@ fn pipeline<W: Write>(
         debug!("Processing custom blocks at AST level");
         process_custom_block_nodes(root, &options.custom_block_config);
     }
+    if options.enable_diagrams {
+        debug!("Rewriting diagram code blocks");
+        crate::diagrams::process_diagram_code_blocks(root);
+    }
     if let Some(toc) = toc_out {
         // Collect after custom-block transforms (which may add
         // structural divs) but before table enhancement (which
@@ -898,6 +922,13 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
             "alert-danger",
             "alert-secondary",
             "table-responsive",
+            // Client-side diagram containers — see
+            // crate::diagrams. Inert HTML hooks; the hydrator reads
+            // the inner <pre>.textContent to reach the source.
+            "mdx-diagram",
+            "mdx-diagram-geojson",
+            "mdx-diagram-topojson",
+            "mdx-diagram-stl",
         ]
         .into_iter()
         .collect(),
@@ -910,10 +941,12 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
             .collect(),
     );
     allowed_classes.insert("code", code_class_refs);
+    // Mermaid's JS library looks for <pre class="mermaid">.
+    allowed_classes.insert("pre", ["mermaid"].into_iter().collect());
 
     builder
         .add_tags(["div", "pre", "code", "span", "input"])
-        .add_tag_attributes("div", &["role", "id"])
+        .add_tag_attributes("div", &["role", "id", "data-mdx-diagram"])
         .add_tag_attributes("td", &["align"])
         .add_tag_attributes("th", &["align"])
         .add_tag_attributes("input", &["type", "checked", "disabled"])
@@ -2001,6 +2034,83 @@ More text.
         let html = process_markdown(markdown, &options).unwrap();
         assert!(!html.contains("<script>"));
         assert!(html.contains("alert alert-info"));
+    }
+
+    // ── Diagrams (mermaid / geojson / topojson / stl) ───────────
+
+    #[test]
+    fn test_diagrams_off_by_default_leaves_code_block() {
+        let md = "```mermaid\ngraph TD\nA-->B\n```\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false);
+        let html = process_markdown(md, &options).unwrap();
+        // Default syntax highlighting kicks in — the content is
+        // rendered as a syntax-highlighted code block, NOT a mermaid
+        // container.
+        assert!(html.contains("<code class=\"language-mermaid\">"));
+        assert!(!html.contains("class=\"mermaid\""));
+    }
+
+    #[test]
+    fn test_diagrams_mermaid_survives_sanitizer() {
+        let md = "```mermaid\ngraph TD\nA-->B\n```\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_syntax_highlighting(false)
+            .with_diagrams(true)
+            .with_unsafe_html(false);
+        let html = process_markdown(md, &options).unwrap();
+        assert!(
+            html.contains("<pre class=\"mermaid\">"),
+            "mermaid container stripped: {html}"
+        );
+        assert!(html.contains("graph TD"));
+    }
+
+    #[test]
+    fn test_diagrams_geojson_survives_sanitizer() {
+        let md = "```geojson\n{\"type\":\"FeatureCollection\",\"features\":[]}\n```\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_syntax_highlighting(false)
+            .with_diagrams(true)
+            .with_unsafe_html(false);
+        let html = process_markdown(md, &options).unwrap();
+        assert!(html.contains("data-mdx-diagram=\"geojson\""));
+        assert!(
+            html.contains("class=\"mdx-diagram mdx-diagram-geojson\""),
+            "geojson container class stripped: {html}"
+        );
+    }
+
+    #[test]
+    fn test_diagrams_topojson_and_stl_survive_sanitizer() {
+        let md = "```topojson\n{}\n```\n\n```stl\nsolid x\nendsolid x\n```\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_syntax_highlighting(false)
+            .with_diagrams(true)
+            .with_unsafe_html(false);
+        let html = process_markdown(md, &options).unwrap();
+        assert!(html.contains("data-mdx-diagram=\"topojson\""));
+        assert!(html.contains("data-mdx-diagram=\"stl\""));
+        assert!(html.contains("class=\"mdx-diagram mdx-diagram-stl\""));
+    }
+
+    #[test]
+    fn test_diagrams_non_matching_lang_still_highlighted() {
+        let md = "```python\nprint('hi')\n```\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_diagrams(true);
+        let html = process_markdown(md, &options).unwrap();
+        assert!(html.contains("<code class=\"language-python\">"));
+        assert!(!html.contains("mdx-diagram"));
     }
 
     // ── Plain text extractor ────────────────────────────────────
