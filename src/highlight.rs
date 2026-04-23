@@ -1,8 +1,10 @@
 //! Syntax highlighting adapter for comrak.
 //!
-//! Implements comrak's `SyntaxHighlighterAdapter` trait using syntect,
-//! allowing syntax highlighting to run during the rendering phase
-//! instead of as a fragile regex post-processing step.
+//! Implements comrak's `SyntaxHighlighterAdapter` trait using
+//! syntect's class-based generator. Output uses CSS class names
+//! (`<span class="…">`) rather than inline `style="…"` attributes,
+//! which means callers must ship a stylesheet — see [`theme_css`]
+//! for generating one from any built-in theme.
 
 use comrak::adapters::SyntaxHighlighterAdapter;
 use std::borrow::Cow;
@@ -10,8 +12,11 @@ use std::collections::HashMap;
 use std::fmt::{self, Write};
 use std::sync::LazyLock;
 use syntect::highlighting::ThemeSet;
-use syntect::html::highlighted_html_for_string;
+use syntect::html::{
+    css_for_theme_with_class_style, ClassStyle, ClassedHTMLGenerator,
+};
 use syntect::parsing::SyntaxSet;
+use syntect::util::LinesWithEndings;
 
 /// Cached `SyntaxSet` to avoid reloading on every function call.
 static SYNTAX_SET: LazyLock<SyntaxSet> =
@@ -23,26 +28,42 @@ static THEME_SET: LazyLock<ThemeSet> =
 /// Default theme used when none is specified.
 pub const DEFAULT_THEME: &str = "base16-ocean.dark";
 
+/// Class style used by every generator we construct.
+///
+/// `ClassStyle::Spaced` emits ` class="foo bar"` form, which works
+/// with the CSS produced by [`theme_css`].
+const CLASS_STYLE: ClassStyle = ClassStyle::Spaced;
+
 /// A syntect-backed adapter for comrak's rendering plugin system.
 ///
-/// This performs syntax highlighting during HTML rendering rather
-/// than via regex post-processing, which is both faster and more
-/// robust.
+/// Performs syntax highlighting during HTML rendering using
+/// class-based output. The adapter does not emit `<pre>` / `<code>`
+/// itself — comrak's renderer handles those tags via
+/// [`SyntaxHighlighterAdapter::write_pre_tag`] and
+/// [`SyntaxHighlighterAdapter::write_code_tag`].
 pub struct SyntectAdapter {
     theme_name: String,
 }
 
 impl SyntectAdapter {
-    /// Creates a new adapter with the given theme name.
+    /// Creates a new adapter, optionally with a named theme.
     ///
-    /// Falls back to [`DEFAULT_THEME`] if the requested theme
-    /// is not found in syntect's built-in theme set.
+    /// The theme name is retained so callers can recover it via
+    /// [`SyntectAdapter::theme_name`] and pass it to [`theme_css`]
+    /// when generating a stylesheet for the rendered output. Falls
+    /// back to [`DEFAULT_THEME`] when the requested theme is not in
+    /// syntect's built-in set.
     pub fn new(theme: Option<&str>) -> Self {
         let theme_name = theme
             .filter(|t| THEME_SET.themes.contains_key(*t))
             .unwrap_or(DEFAULT_THEME)
             .to_owned();
         Self { theme_name }
+    }
+
+    /// Returns the resolved theme name (after fallback).
+    pub fn theme_name(&self) -> &str {
+        &self.theme_name
     }
 
     /// Returns the list of available theme names.
@@ -58,27 +79,30 @@ impl SyntaxHighlighterAdapter for SyntectAdapter {
         lang: Option<&str>,
         code: &str,
     ) -> fmt::Result {
-        let theme = &THEME_SET.themes[&self.theme_name];
         let syntax = lang
             .and_then(|l| SYNTAX_SET.find_syntax_by_token(l))
             .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
 
-        match highlighted_html_for_string(
-            code,
-            &SYNTAX_SET,
+        let mut generator = ClassedHTMLGenerator::new_with_class_style(
             syntax,
-            theme,
-        ) {
-            Ok(html) => {
-                // syntect wraps output in <pre style="...">...</pre>.
-                // Comrak already emits <pre><code> via write_pre_tag/
-                // write_code_tag, so strip syntect's wrapper.
-                let inner = strip_pre_wrapper(&html);
-                output.write_str(inner)
+            &SYNTAX_SET,
+            CLASS_STYLE,
+        );
+
+        for line in LinesWithEndings::from(code) {
+            if generator
+                .parse_html_for_line_which_includes_newline(line)
+                .is_err()
+            {
+                // Highlighter gave up part-way: fall back to plain
+                // escaped text rather than emitting a half-built
+                // span tree.
+                return output
+                    .write_str(&html_escape::encode_text(code));
             }
-            // Fall back to plain text on highlighting failure
-            Err(_) => output.write_str(&html_escape::encode_text(code)),
         }
+
+        output.write_str(&generator.finalize())
     }
 
     fn write_pre_tag(
@@ -120,38 +144,48 @@ impl SyntaxHighlighterAdapter for SyntectAdapter {
     }
 }
 
-/// Strips the `<pre style="...">...</pre>` wrapper that syntect adds,
-/// returning only the inner highlighted spans.
-fn strip_pre_wrapper(html: &str) -> &str {
-    let s = html.trim();
-    // syntect output: <pre style="...">CONTENT\n</pre>
-    let after_open = s.find('>').map(|i| &s[i + 1..]).unwrap_or(s);
-    after_open
-        .strip_suffix("</pre>")
-        .unwrap_or(after_open)
-        .strip_suffix('\n')
-        .unwrap_or(after_open)
-}
-
-/// Applies syntax highlighting to a code string (standalone usage).
+/// Highlights a code string with class-based spans (standalone API).
 ///
-/// This is the public API for callers who want to highlight code
-/// outside of the markdown pipeline.
+/// This is the public entry point for callers who want to highlight
+/// code outside of the markdown pipeline. Output is a sequence of
+/// `<span class="…">` tags — pair it with [`theme_css`] to produce
+/// a stylesheet that renders the colours.
 pub fn apply_syntax_highlighting(
     code: &str,
     lang: &str,
 ) -> Result<String, crate::error::MarkdownError> {
-    let theme = &THEME_SET.themes[DEFAULT_THEME];
     let syntax = SYNTAX_SET
         .find_syntax_by_token(lang)
         .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
 
-    highlighted_html_for_string(code, &SYNTAX_SET, syntax, theme)
-        .map_err(|e| {
-            crate::error::MarkdownError::SyntaxHighlightError(
-                e.to_string(),
-            )
-        })
+    let mut generator = ClassedHTMLGenerator::new_with_class_style(
+        syntax,
+        &SYNTAX_SET,
+        CLASS_STYLE,
+    );
+
+    for line in LinesWithEndings::from(code) {
+        generator
+            .parse_html_for_line_which_includes_newline(line)
+            .map_err(|e| {
+                crate::error::MarkdownError::SyntaxHighlightError(
+                    e.to_string(),
+                )
+            })?;
+    }
+
+    Ok(generator.finalize())
+}
+
+/// Generates a CSS stylesheet for the named built-in theme.
+///
+/// Returns `None` if the theme is not present. The generated CSS
+/// targets the class names emitted by [`apply_syntax_highlighting`]
+/// and the comrak adapter, so callers can either inline the result
+/// in a `<style>` block or write it to a `.css` file.
+pub fn theme_css(theme_name: &str) -> Option<String> {
+    let theme = THEME_SET.themes.get(theme_name)?;
+    css_for_theme_with_class_style(theme, CLASS_STYLE).ok()
 }
 
 #[cfg(test)]
@@ -159,7 +193,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_syntect_adapter_highlights_rust() {
+    fn test_syntect_adapter_emits_class_spans() {
         let adapter = SyntectAdapter::new(None);
         let mut output = String::new();
         adapter
@@ -170,8 +204,12 @@ mod tests {
             )
             .unwrap();
         assert!(
-            output.contains("<span"),
-            "should contain syntax spans"
+            output.contains("<span class="),
+            "should contain class-based syntax spans, got: {output}"
+        );
+        assert!(
+            !output.contains(" style=\""),
+            "must not contain inline styles: {output}"
         );
     }
 
@@ -193,7 +231,7 @@ mod tests {
     #[test]
     fn test_syntect_adapter_invalid_theme_falls_back() {
         let adapter = SyntectAdapter::new(Some("no-such-theme"));
-        assert_eq!(adapter.theme_name, DEFAULT_THEME);
+        assert_eq!(adapter.theme_name(), DEFAULT_THEME);
     }
 
     #[test]
@@ -204,10 +242,11 @@ mod tests {
     }
 
     #[test]
-    fn test_standalone_highlighting() {
-        let result = apply_syntax_highlighting("fn main() {}", "rust");
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("<span"));
+    fn test_standalone_highlighting_emits_classes() {
+        let html =
+            apply_syntax_highlighting("fn main() {}", "rust").unwrap();
+        assert!(html.contains("<span class="));
+        assert!(!html.contains(" style=\""));
     }
 
     #[test]
@@ -296,5 +335,16 @@ mod tests {
             "nonexistent-language-xyz",
         );
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_theme_css_known_theme() {
+        let css = theme_css(DEFAULT_THEME).expect("default theme");
+        assert!(css.contains(".code"));
+    }
+
+    #[test]
+    fn test_theme_css_unknown_theme() {
+        assert!(theme_css("no-such-theme").is_none());
     }
 }

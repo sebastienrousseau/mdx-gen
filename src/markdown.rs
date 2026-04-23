@@ -518,6 +518,12 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
         .add_tag_attributes("h5", &["id"])
         .add_tag_attributes("h6", &["id"])
         .add_tag_attributes("a", &["id"])
+        // Syntect's class-based highlighter emits open-ended class
+        // names on <span> (one per grammar scope). Whitelisting them
+        // individually is impractical, so we allow `class` on <span>
+        // with unrestricted values — class attributes are CSS hooks,
+        // they cannot execute script.
+        .add_tag_attributes("span", &["class"])
         .add_generic_attributes(["style"])
         .allowed_classes(allowed_classes);
 }
@@ -564,6 +570,17 @@ fn build_custom_sanitizer(
 ) -> ammonia::Builder<'_> {
     let mut builder = ammonia::Builder::default();
     configure_default_sanitizer(&mut builder);
+
+    // ammonia forbids a tag from appearing in both `tag_attributes`
+    // (with "class") and `allowed_classes`. The default config
+    // grants <span> open `class` via tag_attributes so syntect's
+    // class-based highlighter survives sanitization. If the caller
+    // is now restricting classes for any of those tags via
+    // SanitizerConfig, swap them out of permissive mode before
+    // adding the whitelist.
+    for tag in cfg.extra_allowed_classes.keys() {
+        builder.rm_tag_attributes(tag.as_str(), &["class"]);
+    }
 
     if !cfg.extra_tags.is_empty() {
         builder.add_tags(cfg.extra_tags.iter().map(String::as_str));
@@ -997,6 +1014,51 @@ fn main() {
         let markdown =
             "<span class=\"badge\">new</span> <span class=\"danger\">x</span>";
 
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new()
+                    .with_allowed_class("span", "badge"),
+            );
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            html.contains("class=\"badge\""),
+            "whitelisted class survives: {html}"
+        );
+        assert!(
+            !html.contains("class=\"danger\""),
+            "non-whitelisted class dropped: {html}"
+        );
+    }
+
+    #[cfg(feature = "syntax_highlighting")]
+    #[test]
+    fn test_sanitized_output_keeps_syntect_span_classes() {
+        // Sanitized pipeline must preserve the open-ended class
+        // names that ClassedHTMLGenerator emits on <span> — without
+        // them, code blocks render unstyled.
+        let markdown = "```rust\nfn main() {}\n```";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            html.contains("<span class=\""),
+            "syntect classes were stripped by sanitizer: {html}"
+        );
+    }
+
+    #[test]
+    fn test_sanitizer_config_restricts_span_class() {
+        // Custom config with extra_allowed_classes for span must
+        // override the default permissive span policy: only the
+        // whitelisted class survives.
+        let markdown = "<span class=\"badge\">a</span> <span class=\"danger\">b</span>";
         let options = MarkdownOptions::new()
             .with_custom_blocks(false)
             .with_enhanced_tables(false)

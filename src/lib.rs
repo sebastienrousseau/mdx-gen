@@ -39,6 +39,12 @@ pub use error::MarkdownError;
 #[cfg(feature = "syntax_highlighting")]
 pub use highlight::apply_syntax_highlighting;
 
+/// Generates a CSS stylesheet for a built-in syntect theme so that
+/// callers can render the class-based output produced by the
+/// highlighter and the comrak adapter.
+#[cfg(feature = "syntax_highlighting")]
+pub use highlight::theme_css;
+
 pub use extensions::ColumnAlignment;
 pub use extensions::CustomBlockConfig;
 pub use extensions::CustomBlockType;

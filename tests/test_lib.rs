@@ -77,8 +77,15 @@ mod tests {
             "Code block content was not processed correctly"
         );
 
-        // Check that syntax highlighting styles are applied
-        assert!(result.contains("color:#a3be8c;"), "Syntax highlighting style for string was not applied correctly");
+        // Highlighter now emits class-based spans (no inline styles).
+        assert!(
+            result.contains("<span class=\""),
+            "Expected class-based syntax spans in: {result}"
+        );
+        assert!(
+            !result.contains(" style=\""),
+            "Inline style attributes should no longer appear: {result}"
+        );
     }
 
     #[test]
