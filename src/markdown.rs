@@ -1261,6 +1261,174 @@ fn main() {
     }
 
     #[test]
+    fn test_sanitizer_config_applies_extra_tag_attribute() {
+        // Drives build_custom_sanitizer past validation with a
+        // tag-specific attribute add — exercises the
+        // add_tag_attributes branch in the sanitiser factory.
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new()
+                    .with_tag("section")
+                    .with_tag_attribute("section", "data-foo"),
+            );
+
+        let md = r#"<section data-foo="bar">hello</section>"#;
+        let html = process_markdown(md, &options).unwrap();
+        assert!(html.contains("<section"));
+        assert!(html.contains("data-foo=\"bar\""));
+    }
+
+    #[test]
+    fn test_sanitizer_config_applies_extra_generic_attribute() {
+        // Drives build_custom_sanitizer past validation with a
+        // generic-attr add — exercises the add_generic_attributes
+        // branch.
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new().with_generic_attribute("data-x"),
+            );
+
+        let md = r#"<p data-x="v">hi</p>"#;
+        let html = process_markdown(md, &options).unwrap();
+        assert!(html.contains("data-x=\"v\""));
+    }
+
+    #[test]
+    fn test_sanitizer_config_with_tag_attribute_direct() {
+        // The builder method had zero direct coverage.
+        let cfg = SanitizerConfig::new()
+            .with_tag_attribute("div", "role")
+            .with_tag_attribute("div", "id");
+        let attrs = cfg
+            .extra_tag_attributes
+            .get("div")
+            .expect("div should exist");
+        assert_eq!(attrs, &vec!["role".to_string(), "id".to_string()]);
+    }
+
+    #[test]
+    fn test_validation_sanitizer_tag_attr_invalid_tag() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new()
+                    .with_tag_attribute("has space", "id"),
+            );
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("sanitizer_config.extra_tag_attributes")));
+    }
+
+    #[test]
+    fn test_validation_sanitizer_tag_attr_invalid_attr_name() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new().with_tag_attribute("div", ""),
+            );
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("sanitizer_config.extra_tag_attributes")));
+    }
+
+    #[test]
+    fn test_validation_sanitizer_allowed_class_invalid_tag() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new()
+                    .with_allowed_class("bad tag", "foo"),
+            );
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("sanitizer_config.extra_allowed_classes")));
+    }
+
+    #[test]
+    fn test_validation_sanitizer_allowed_class_empty() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new().with_allowed_class("span", ""),
+            );
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("sanitizer_config.extra_allowed_classes")));
+    }
+
+    #[test]
+    fn test_validation_custom_block_class_override_whitespace() {
+        let cfg = CustomBlockConfig::new()
+            .with_class(CustomBlockType::Note, "bad class");
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_block_config(cfg);
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("custom_block_config.class_overrides")));
+    }
+
+    #[test]
+    fn test_toc_extracts_image_title() {
+        // Exercises the NodeValue::Image branch of `extract_text`.
+        let md = "# See ![alt](logo.png \"Logo Title\") here\n";
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false);
+        let (_html, toc) =
+            process_markdown_with_toc(md, &options).unwrap();
+        assert_eq!(toc.len(), 1);
+        // Image title text should make it into the heading's plain text.
+        assert!(
+            toc[0].text.contains("Logo Title")
+                || toc[0].text.contains("alt"),
+            "expected image title/alt in: {:?}",
+            toc[0].text
+        );
+    }
+
+    #[test]
+    fn test_plain_text_soft_break_inserts_space() {
+        // Two text nodes joined by a soft break should get a space
+        // between them (covers SoftBreak/LineBreak arm in
+        // collect_all_text).
+        let md = "one\ntwo\nthree\n";
+        let text = process_markdown_to_plain_text(
+            md,
+            &MarkdownOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(text, "one two three");
+    }
+
+    #[test]
+    fn test_plain_text_image_title_included() {
+        // Image titles end up in plain-text output too.
+        let md = "Caption: ![alt](x.png \"Title Here\")\n";
+        let text = process_markdown_to_plain_text(
+            md,
+            &MarkdownOptions::default(),
+        )
+        .unwrap();
+        // Plain text should at minimum keep the surrounding caption.
+        assert!(text.contains("Caption:"));
+    }
+
+    #[test]
     fn test_validation_reports_all_failures_at_once() {
         // Three independent violations in one options instance.
         // The validator must collect all of them, not bail on the

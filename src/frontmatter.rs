@@ -135,4 +135,53 @@ mod tests {
         let title = mapping.get(&key).expect("should have title");
         assert_eq!(*title, yaml_safe::Value::String("Hello".into()));
     }
+
+    #[cfg(feature = "yaml_support")]
+    #[test]
+    fn test_parse_frontmatter_as_typed() {
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Meta {
+            title: String,
+            port: u16,
+            draft: bool,
+        }
+
+        let yaml = "title: Shipping\nport: 8080\ndraft: false\n";
+        let parsed: Meta = parse_frontmatter_as(yaml).unwrap();
+        assert_eq!(
+            parsed,
+            Meta {
+                title: "Shipping".into(),
+                port: 8080,
+                draft: false,
+            }
+        );
+    }
+
+    #[cfg(feature = "yaml_support")]
+    #[test]
+    fn test_parse_frontmatter_as_surfaces_error() {
+        #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
+        struct StrictU32 {
+            count: u32,
+        }
+
+        // "not-a-number" cannot deserialize into u32 — the parse
+        // error should surface as MarkdownError::FrontmatterError.
+        let err =
+            parse_frontmatter_as::<StrictU32>("count: not-a-number\n")
+                .unwrap_err();
+        assert!(matches!(err, MarkdownError::FrontmatterError(_)));
+    }
+
+    #[cfg(feature = "yaml_support")]
+    #[test]
+    fn test_parse_frontmatter_surfaces_error() {
+        // Truly malformed YAML must surface as FrontmatterError.
+        let err = parse_frontmatter("key: [unclosed\n").unwrap_err();
+        assert!(matches!(err, MarkdownError::FrontmatterError(_)));
+    }
 }

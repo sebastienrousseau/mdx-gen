@@ -347,4 +347,92 @@ mod tests {
     fn test_theme_css_unknown_theme() {
         assert!(theme_css("no-such-theme").is_none());
     }
+
+    /// Minimal `fmt::Write` sink that rejects the first write. Used
+    /// to exercise the `?`-on-write_str error paths in the adapter.
+    struct FailingWrite;
+    impl fmt::Write for FailingWrite {
+        fn write_str(&mut self, _: &str) -> fmt::Result {
+            Err(fmt::Error)
+        }
+    }
+
+    #[test]
+    fn test_write_pre_tag_propagates_write_error() {
+        let adapter = SyntectAdapter::new(None);
+        let err =
+            adapter.write_pre_tag(&mut FailingWrite, HashMap::new());
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_write_pre_tag_propagates_attribute_write_error() {
+        // First write (`<pre`) succeeds into the throwaway String
+        // wrapper below; the attribute write errors on first call.
+        struct FailAfterFirst(usize);
+        impl fmt::Write for FailAfterFirst {
+            fn write_str(&mut self, _: &str) -> fmt::Result {
+                if self.0 == 0 {
+                    self.0 += 1;
+                    Ok(())
+                } else {
+                    Err(fmt::Error)
+                }
+            }
+        }
+
+        let adapter = SyntectAdapter::new(None);
+        let mut attrs = HashMap::new();
+        attrs.insert("class", Cow::Borrowed("demo"));
+        let err = adapter
+            .write_pre_tag(&mut FailAfterFirst(0), attrs)
+            .unwrap_err();
+        let _ = err; // just asserting it errored
+    }
+
+    #[test]
+    fn test_write_code_tag_propagates_write_error() {
+        let adapter = SyntectAdapter::new(None);
+        let err =
+            adapter.write_code_tag(&mut FailingWrite, HashMap::new());
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_write_code_tag_propagates_attribute_write_error() {
+        struct FailAfterFirst(usize);
+        impl fmt::Write for FailAfterFirst {
+            fn write_str(&mut self, _: &str) -> fmt::Result {
+                if self.0 == 0 {
+                    self.0 += 1;
+                    Ok(())
+                } else {
+                    Err(fmt::Error)
+                }
+            }
+        }
+
+        let adapter = SyntectAdapter::new(None);
+        let mut attrs = HashMap::new();
+        attrs.insert("class", Cow::Borrowed("language-rust"));
+        let err = adapter
+            .write_code_tag(&mut FailAfterFirst(0), attrs)
+            .unwrap_err();
+        let _ = err;
+    }
+
+    #[test]
+    fn test_write_highlighted_propagates_write_error() {
+        // FailingWrite rejects immediately, so both the fallback
+        // branch and the normal finalize branch error out.
+        let adapter = SyntectAdapter::new(None);
+        let err = adapter
+            .write_highlighted(
+                &mut FailingWrite,
+                Some("rust"),
+                "fn x() {}",
+            )
+            .unwrap_err();
+        let _ = err;
+    }
 }
