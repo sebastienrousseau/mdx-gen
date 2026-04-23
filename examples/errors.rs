@@ -3,7 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! # Errors Example — Every [`MarkdownError`] variant
+//! # Errors — Every [`MarkdownError`] variant
 //!
 //! ## What this example is
 //!
@@ -35,7 +35,7 @@
 //! ## Run it
 //!
 //! ```sh
-//! cargo run --example errors_example
+//! cargo run --example errors
 //! ```
 //!
 //! [`ParseError`]: mdx_gen::MarkdownError::ParseError

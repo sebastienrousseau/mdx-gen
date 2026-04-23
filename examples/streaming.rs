@@ -3,7 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! # Streaming Example — Render directly to a file
+//! # Streaming — Render directly to a file or socket
 //!
 //! ## What this example is
 //!
@@ -36,11 +36,11 @@
 //! ## Run it
 //!
 //! ```sh
-//! cargo run --example streaming_example
+//! cargo run --example streaming
 //! ```
 //!
-//! The example writes to `target/examples/streaming_example.html`.
-//! Open that file in a browser to verify the rendered document.
+//! The example writes to `target/examples/streaming.html`. Open
+//! that file in a browser to verify the rendered document.
 
 use std::fs::{self, File};
 use std::io::BufWriter;
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Step 1: Work out where the output goes ────────────────────
     let out_dir: PathBuf = PathBuf::from("target/examples");
     fs::create_dir_all(&out_dir)?;
-    let out_path = out_dir.join("streaming_example.html");
+    let out_path = out_dir.join("streaming.html");
 
     // ── Step 2: Configure the pipeline ────────────────────────────
     let mut comrak_options = Options::default();

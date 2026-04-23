@@ -3,7 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! # Sanitizer Example — Extend the default HTML allow-list
+//! # CMS — Safe rendering for user-submitted content
 //!
 //! ## What this example is
 //!
@@ -36,10 +36,17 @@
 //! when the input is untrusted. Only opt back in when the input
 //! is trusted (your own CMS output, a test harness, etc.).
 //!
+//! ## When to use this pattern
+//!
+//! User-generated content pipelines: forums, comment threads,
+//! CMS-authored pages, any flow where the Markdown source is
+//! untrusted. The default policy errs on the side of stripping;
+//! extend only the pieces your template needs.
+//!
 //! ## Run it
 //!
 //! ```sh
-//! cargo run --example sanitizer_example
+//! cargo run --example cms
 //! ```
 
 use mdx_gen::{process_markdown, MarkdownOptions, SanitizerConfig};

@@ -3,7 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! # Pipeline Example — Every feature wired together
+//! # Quickstart — Every feature wired together
 //!
 //! ## What this example is
 //!
@@ -22,15 +22,22 @@
 //! - **Custom blocks** — the `<div class="note">` / `warning` / `tip`
 //!   shorthand transformed into Bootstrap-shaped alert markup.
 //! - **Syntax highlighting** — class-based spans ready to be paired
-//!   with a stylesheet (see `theme_css_example`).
+//!   with a stylesheet (see the `styling` example).
 //! - **Header ids** — anchor ids so headings become jump targets.
 //! - **Sanitiser** — dangerous raw HTML stripped while the safe
 //!   structural tags we emit survive.
 //!
+//! ## How this differs from `basic`
+//!
+//! `basic` is the minimum-wiring starter — one call, defaults,
+//! prints the HTML. `quickstart` turns **every** feature on at once
+//! so you can see how they compose; use it as a template when you
+//! want the kitchen-sink configuration.
+//!
 //! ## Run it
 //!
 //! ```sh
-//! cargo run --example pipeline_example
+//! cargo run --example quickstart
 //! ```
 
 use mdx_gen::{process_markdown, MarkdownOptions, Options};

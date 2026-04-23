@@ -25,14 +25,13 @@
 //! ## When to use this pattern
 //!
 //! When you're evaluating the crate or writing a one-off converter
-//! and want the simplest possible wiring. Reach for the other
-//! examples (`pipeline_example`, `extensions_example`, `toc_example`)
-//! once you need the extras.
+//! and want the simplest possible wiring. Reach for `quickstart`,
+//! `blog`, or `docs` once you need the extras.
 //!
 //! ## Run it
 //!
 //! ```sh
-//! cargo run --example basic_example
+//! cargo run --example basic
 //! ```
 
 use mdx_gen::{process_markdown, MarkdownOptions, Options};

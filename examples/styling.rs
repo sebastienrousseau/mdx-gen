@@ -3,7 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! # Theme CSS Example — Generate a stylesheet for the highlighter
+//! # Styling — Ship a highlighter stylesheet + standalone highlighter
 //!
 //! ## What this example is
 //!
@@ -35,10 +35,10 @@
 //! ## Run it
 //!
 //! ```sh
-//! cargo run --example theme_css_example
+//! cargo run --example styling
 //! ```
 //!
-//! Output lands in `target/examples/theme_css_example/`.
+//! Output lands in `target/examples/styling/`.
 //!
 //! [`SyntectAdapter::available_themes`]: mdx_gen::highlight::SyntectAdapter::available_themes
 
@@ -46,7 +46,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use mdx_gen::highlight::SyntectAdapter;
-use mdx_gen::{process_markdown, theme_css, MarkdownOptions, Options};
+use mdx_gen::{
+    apply_syntax_highlighting, process_markdown, theme_css,
+    MarkdownOptions, Options,
+};
 
 const DEMO_MARKDOWN: &str = r#"# Theme demo
 
@@ -67,8 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("──────────────────────");
 
     // ── Step 1: Pick an output directory ──────────────────────────
-    let out_dir: PathBuf =
-        PathBuf::from("target/examples/theme_css_example");
+    let out_dir: PathBuf = PathBuf::from("target/examples/styling");
     fs::create_dir_all(&out_dir)?;
 
     // ── Step 2: List every built-in theme ─────────────────────────
@@ -133,6 +135,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "    ↪ open it with `open {}` to see the highlighter in action",
         html_path.display()
     );
+
+    // ── Step 5: Standalone highlighter (outside the MD pipeline) ──
+    //
+    // `apply_syntax_highlighting` is the public entry point for code
+    // you pulled from somewhere *other* than a Markdown fenced block
+    // — a database row, a REPL capture, a web form submission. Same
+    // class-based output shape as the full pipeline, so it pairs
+    // with the same stylesheet.
+    let snippet = "let x: u32 = 42;";
+    let highlighted = apply_syntax_highlighting(snippet, "rust")?;
+    println!("\n    🧪 Standalone highlight:");
+    println!("       input:  {snippet}");
+    println!("       output: {highlighted}");
 
     Ok(())
 }

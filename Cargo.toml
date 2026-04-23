@@ -88,11 +88,11 @@ tempfile = "3.13"
 assert_fs = "1.1"
 predicates = "3.1"
 criterion = "0.5"
-# Needed only by `examples/frontmatter_example.rs` so it can derive
-# Deserialize/Serialize on the demo struct. yaml_safe re-exports the
-# traits but not the proc-macros, and yaml_safe already depends on
-# serde with the "derive" feature, so this adds no new crate to the
-# compile graph.
+# Needed only by `examples/blog.rs` so it can derive
+# Deserialize/Serialize on the demo post struct. yaml_safe
+# re-exports the traits but not the proc-macros, and yaml_safe
+# already depends on serde with the "derive" feature, so this adds
+# no new crate to the compile graph.
 serde = { version = "1", features = ["derive"] }
 
 [[bench]]
@@ -103,7 +103,7 @@ harness = false
 # feature. All other example files under `examples/` are picked up
 # by Cargo's auto-discovery without further configuration.
 [[example]]
-name = "frontmatter_example"
+name = "blog"
 required-features = ["yaml_support"]
 
 [profile.bench]
