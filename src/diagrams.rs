@@ -228,8 +228,10 @@ mod tests {
         assert!(s.contains("data-mdx-diagram=\"geojson\""));
         assert!(s.contains("data-mdx-diagram=\"topojson\""));
         assert!(s.contains("data-mdx-diagram=\"stl\""));
-        // Wrapped in <script type="module">...</script>.
-        assert!(s.starts_with("<script type=\"module\">"));
+        // Leads with an importmap (so three/addons resolve to the
+        // same THREE instance) followed by the module script.
+        assert!(s.starts_with("<script type=\"importmap\">"));
+        assert!(s.contains("<script type=\"module\">"));
         assert!(s.trim_end().ends_with("</script>"));
     }
 }
