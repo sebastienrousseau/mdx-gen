@@ -1,63 +1,47 @@
-//! Client-side diagram rendering for `mermaid`, `geojson`,
-//! `topojson`, and ASCII `stl` fenced code blocks.
+//! Mermaid diagram rendering for fenced code blocks tagged
+//! `mermaid`.
 //!
-//! The rendering strategy mirrors what github.com does for mermaid
-//! and geojson: rather than rasterising server-side (which would
-//! require a headless browser or equivalent heavy runtime), mdx-gen
-//! rewrites each recognised code block into sanitizer-safe HTML
-//! containers that a small client-side JS module hydrates into
-//! inline `<svg>` at page-load time.
-//!
-//! # Supported formats
-//!
-//! | Info string | Container                                                     | Renderer (client-side) |
-//! |:------------|:--------------------------------------------------------------|:-----------------------|
-//! | `mermaid`   | `<pre class="mermaid">…</pre>`                                | [mermaid.js] v10 (ESM) |
-//! | `geojson`   | `<div data-mdx-diagram="geojson"><pre>…</pre></div>`          | [d3-geo] v3 (SVG out)  |
-//! | `topojson`  | `<div data-mdx-diagram="topojson"><pre>…</pre></div>`         | [topojson-client] + d3-geo |
-//! | `stl`       | `<div data-mdx-diagram="stl"><pre>…</pre></div>`              | [three.js] + STLLoader + SVGRenderer |
-//!
-//! Content inside `<pre>` is plain text — the hydrator reads
-//! `.textContent` at load time. HTML injection vectors are therefore
-//! neutralised by the sanitizer's standard string-escaping.
+//! Rather than rasterising server-side (which would require a
+//! headless browser or equivalent heavy runtime), mdx-gen rewrites
+//! each `mermaid` code block into a sanitizer-safe
+//! `<pre class="mermaid">…</pre>` container that the client-side
+//! [mermaid.js] library hydrates into inline SVG at page-load
+//! time. This matches what github.com does natively in README
+//! rendering.
 //!
 //! # Usage
 //!
 //! Enable the transform with
 //! [`crate::MarkdownOptions::with_diagrams`]. Emit the hydration
 //! script into your page shell exactly once with
-//! [`hydration_script_html`]. The output is SVG in every case.
+//! [`hydration_script_html`]. The output is SVG.
 //!
-//! # Why client-side?
+//! ```
+//! use mdx_gen::{process_markdown, MarkdownOptions};
 //!
-//! Server-side rasterisation of these four disparate formats would
-//! need a headless Chromium (mermaid), a geospatial rasteriser
-//! (geojson/topojson), and a 3-D rendering pipeline (stl). The
-//! hydration-script approach keeps mdx-gen pure-Rust + dependency-
-//! light while matching github.com's actual behaviour for the two
-//! formats GitHub supports natively.
+//! let md = "```mermaid\ngraph TD\nA --> B\n```\n";
+//! let options = MarkdownOptions::new()
+//!     .with_custom_blocks(false)
+//!     .with_enhanced_tables(false)
+//!     .with_syntax_highlighting(false)
+//!     .with_diagrams(true);
+//! let html = process_markdown(md, &options).unwrap();
+//! assert!(html.contains("<pre class=\"mermaid\">"));
+//! ```
 //!
 //! [mermaid.js]: https://mermaid.js.org/
-//! [d3-geo]: https://github.com/d3/d3-geo
-//! [topojson-client]: https://github.com/topojson/topojson-client
-//! [three.js]: https://threejs.org/
 
 use comrak::nodes::{AstNode, NodeHtmlBlock, NodeValue};
 
-/// Set of info-string tokens the transform recognises. Matched on
-/// the first whitespace-delimited token of the fenced code block's
-/// info string so `mermaid classDiagram` still counts as mermaid.
-const DIAGRAM_KINDS: &[&str] =
-    &["mermaid", "geojson", "topojson", "stl"];
-
 /// Walks the comrak AST and replaces every `NodeValue::CodeBlock`
-/// whose info-string names a supported diagram format with a
-/// `NodeValue::HtmlBlock` containing the sanitizer-safe container
-/// markup.
+/// whose info-string names `mermaid` with a
+/// `NodeValue::HtmlBlock` containing the sanitizer-safe
+/// `<pre class="mermaid">` container.
 ///
-/// Non-diagram code blocks pass through unchanged — the syntax
-/// highlighter still sees them downstream. Call sites should
-/// invoke this before table enhancement and rendering.
+/// Kind-matching is done on the first whitespace-delimited token
+/// of the info string so `mermaid classDiagram` still counts as
+/// mermaid. Non-mermaid code blocks pass through unchanged — the
+/// syntax highlighter still sees them downstream.
 pub fn process_diagram_code_blocks<'a>(root: &'a AstNode<'a>) {
     for node in root.descendants() {
         let mut ast = node.data.borrow_mut();
@@ -69,8 +53,8 @@ pub fn process_diagram_code_blocks<'a>(root: &'a AstNode<'a>) {
                     .next()
                     .unwrap_or("")
                     .to_ascii_lowercase();
-                if DIAGRAM_KINDS.contains(&kind.as_str()) {
-                    Some(render_container(&kind, &block.literal))
+                if kind == "mermaid" {
+                    Some(render_mermaid(&block.literal))
                 } else {
                     None
                 }
@@ -86,27 +70,20 @@ pub fn process_diagram_code_blocks<'a>(root: &'a AstNode<'a>) {
     }
 }
 
-/// Builds the HTML container for a single diagram block. Content
-/// is HTML-escaped so raw `<` / `>` inside the source cannot break
-/// out of the `<pre>` context.
-fn render_container(kind: &str, source: &str) -> String {
+/// Builds the `<pre class="mermaid">` container for a single
+/// block. Content is HTML-escaped so raw `<` / `>` inside the
+/// source cannot break out of the `<pre>` context.
+fn render_mermaid(source: &str) -> String {
     let escaped = html_escape::encode_text(source);
-    if kind == "mermaid" {
-        format!("<pre class=\"mermaid\">{escaped}</pre>\n")
-    } else {
-        format!(
-            "<div class=\"mdx-diagram mdx-diagram-{kind}\" data-mdx-diagram=\"{kind}\"><pre>{escaped}</pre></div>\n"
-        )
-    }
+    format!("<pre class=\"mermaid\">{escaped}</pre>\n")
 }
 
-/// Returns the `<script type="module">…</script>` block users should
-/// drop into their page shell (usually just before `</body>`) to
-/// hydrate every mdx-gen diagram container on the page.
-///
-/// The script loads mermaid, d3, topojson-client, and three.js
-/// (+ STLLoader + SVGRenderer) from jsdelivr lazily per diagram
-/// kind — only what the page actually uses is fetched.
+/// Returns the `<script type="module">…</script>` block users
+/// should drop into their page shell (usually just before
+/// `</body>`) to hydrate every `<pre class="mermaid">` container
+/// on the page. The script is safe to include on pages that have
+/// no diagrams — it short-circuits when no mermaid container is
+/// present.
 ///
 /// The return value is a `'static` string; embed it verbatim.
 #[must_use]
@@ -162,44 +139,9 @@ mod tests {
     }
 
     #[test]
-    fn test_geojson_block_rewritten() {
-        let md = "```geojson\n{\"type\":\"Feature\"}\n```\n";
-        let found =
-            transform_and_find(md, "data-mdx-diagram=\"geojson\"")
-                .expect("geojson container missing");
-        assert!(
-            found.contains("class=\"mdx-diagram mdx-diagram-geojson\"")
-        );
-        assert!(found.contains("<pre>"));
-        // Content round-trips through `html_escape::encode_text`
-        // which leaves ASCII-safe characters (`"`, `:`, etc.)
-        // alone; only `<`, `>`, and `&` are entity-encoded.
-        assert!(found.contains(r#""type":"Feature""#));
-    }
-
-    #[test]
-    fn test_topojson_block_rewritten() {
-        let md = "```topojson\n{\"type\":\"Topology\"}\n```\n";
-        let found =
-            transform_and_find(md, "data-mdx-diagram=\"topojson\"")
-                .expect("topojson container missing");
-        assert!(found
-            .contains("class=\"mdx-diagram mdx-diagram-topojson\""));
-    }
-
-    #[test]
-    fn test_stl_block_rewritten() {
-        let md = "```stl\nsolid cube\nendsolid cube\n```\n";
-        let found = transform_and_find(md, "data-mdx-diagram=\"stl\"")
-            .expect("stl container missing");
-        assert!(found.contains("class=\"mdx-diagram mdx-diagram-stl\""));
-        assert!(found.contains("solid cube"));
-    }
-
-    #[test]
     fn test_info_string_with_attributes() {
         // `mermaid classDiagram` should still match on the first
-        // token.
+        // whitespace-delimited token.
         let md =
             "```mermaid classDiagram\nclassDiagram\n  A<|--B\n```\n";
         assert!(transform_and_find(md, "class=\"mermaid\"").is_some());
@@ -208,8 +150,22 @@ mod tests {
     #[test]
     fn test_unknown_lang_passes_through() {
         let md = "```rust\nfn main() {}\n```\n";
-        assert!(transform_and_find(md, "mdx-diagram").is_none());
         assert!(transform_and_find(md, "class=\"mermaid\"").is_none());
+    }
+
+    #[test]
+    fn test_non_matching_diagram_langs_pass_through() {
+        // Formats that previously had first-class support (geojson,
+        // topojson, stl) are no longer recognised — they should
+        // pass through to the syntax highlighter like any other
+        // unknown language.
+        for lang in ["geojson", "topojson", "stl"] {
+            let md = format!("```{lang}\n{{\"a\":1}}\n```\n");
+            assert!(
+                transform_and_find(&md, "class=\"mermaid\"").is_none(),
+                "{lang} should not produce a mermaid container"
+            );
+        }
     }
 
     #[test]
@@ -222,16 +178,12 @@ mod tests {
     }
 
     #[test]
-    fn test_hydration_script_mentions_each_renderer() {
+    fn test_hydration_script_imports_mermaid() {
         let s = hydration_script_html();
         assert!(s.contains("pre.mermaid"));
-        assert!(s.contains("data-mdx-diagram=\"geojson\""));
-        assert!(s.contains("data-mdx-diagram=\"topojson\""));
-        assert!(s.contains("data-mdx-diagram=\"stl\""));
-        // Leads with an importmap (so three/addons resolve to the
-        // same THREE instance) followed by the module script.
-        assert!(s.starts_with("<script type=\"importmap\">"));
-        assert!(s.contains("<script type=\"module\">"));
+        assert!(s.contains("mermaid"));
+        // Wrapped in <script type="module">…</script>.
+        assert!(s.starts_with("<script type=\"module\">"));
         assert!(s.trim_end().ends_with("</script>"));
     }
 }

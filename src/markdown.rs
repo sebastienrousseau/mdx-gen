@@ -922,13 +922,6 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
             "alert-danger",
             "alert-secondary",
             "table-responsive",
-            // Client-side diagram containers — see
-            // crate::diagrams. Inert HTML hooks; the hydrator reads
-            // the inner <pre>.textContent to reach the source.
-            "mdx-diagram",
-            "mdx-diagram-geojson",
-            "mdx-diagram-topojson",
-            "mdx-diagram-stl",
         ]
         .into_iter()
         .collect(),
@@ -946,7 +939,7 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
 
     builder
         .add_tags(["div", "pre", "code", "span", "input"])
-        .add_tag_attributes("div", &["role", "id", "data-mdx-diagram"])
+        .add_tag_attributes("div", &["role", "id"])
         .add_tag_attributes("td", &["align"])
         .add_tag_attributes("th", &["align"])
         .add_tag_attributes("input", &["type", "checked", "disabled"])
@@ -2070,39 +2063,9 @@ More text.
     }
 
     #[test]
-    fn test_diagrams_geojson_survives_sanitizer() {
-        let md = "```geojson\n{\"type\":\"FeatureCollection\",\"features\":[]}\n```\n";
-        let options = MarkdownOptions::new()
-            .with_custom_blocks(false)
-            .with_enhanced_tables(false)
-            .with_syntax_highlighting(false)
-            .with_diagrams(true)
-            .with_unsafe_html(false);
-        let html = process_markdown(md, &options).unwrap();
-        assert!(html.contains("data-mdx-diagram=\"geojson\""));
-        assert!(
-            html.contains("class=\"mdx-diagram mdx-diagram-geojson\""),
-            "geojson container class stripped: {html}"
-        );
-    }
-
-    #[test]
-    fn test_diagrams_topojson_and_stl_survive_sanitizer() {
-        let md = "```topojson\n{}\n```\n\n```stl\nsolid x\nendsolid x\n```\n";
-        let options = MarkdownOptions::new()
-            .with_custom_blocks(false)
-            .with_enhanced_tables(false)
-            .with_syntax_highlighting(false)
-            .with_diagrams(true)
-            .with_unsafe_html(false);
-        let html = process_markdown(md, &options).unwrap();
-        assert!(html.contains("data-mdx-diagram=\"topojson\""));
-        assert!(html.contains("data-mdx-diagram=\"stl\""));
-        assert!(html.contains("class=\"mdx-diagram mdx-diagram-stl\""));
-    }
-
-    #[test]
     fn test_diagrams_non_matching_lang_still_highlighted() {
+        // With diagrams on, a non-mermaid language still gets the
+        // normal syntax-highlighter treatment.
         let md = "```python\nprint('hi')\n```\n";
         let options = MarkdownOptions::new()
             .with_custom_blocks(false)
@@ -2110,6 +2073,25 @@ More text.
             .with_diagrams(true);
         let html = process_markdown(md, &options).unwrap();
         assert!(html.contains("<code class=\"language-python\">"));
+        assert!(!html.contains("class=\"mermaid\""));
+    }
+
+    #[test]
+    fn test_diagrams_formerly_supported_langs_highlight_as_usual() {
+        // `geojson`, `topojson`, `stl` used to be recognised but
+        // produced lifeless output even with rich demo data and
+        // proper lighting, so the project narrowed scope to
+        // mermaid. Those code blocks now flow through the standard
+        // syntax-highlighter path (or render as plain code when
+        // the syntax is unknown to syntect), never as a mermaid
+        // container.
+        let md = "```geojson\n{\"type\":\"Feature\"}\n```\n\n```stl\nsolid x\nendsolid x\n```\n";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_diagrams(true);
+        let html = process_markdown(md, &options).unwrap();
+        assert!(!html.contains("class=\"mermaid\""));
         assert!(!html.contains("mdx-diagram"));
     }
 

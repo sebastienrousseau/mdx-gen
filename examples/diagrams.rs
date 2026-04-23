@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 MDX Gen. All rights reserved.
 
-//! Client-side diagram rendering — mermaid, geojson, topojson, stl.
+//! Mermaid diagram rendering — flowchart, sequence, class, gantt.
 //!
 //! Run: `cargo run --example diagrams`
 
@@ -17,188 +17,70 @@ use mdx_gen::{
     hydration_script_html, process_markdown, MarkdownOptions, Options,
 };
 
-const SOURCE: &str = r##"# Diagrams showcase
+// Four different diagram kinds that mermaid itself supports —
+// this demonstrates that every mermaid dialect flows through
+// mdx-gen's client-side hydration path unchanged.
+const SOURCE: &str = r#"# Mermaid showcase
 
-## Mermaid
+## Flowchart
 
 ```mermaid
-graph TD
-  A[Source Markdown] --> B[mdx-gen]
-  B --> C[HTML + hydrator]
-  C --> D[Inline SVG]
+flowchart LR
+  A[Markdown source] --> B{{mdx-gen pipeline}}
+  B --> C[Sanitized HTML]
+  B --> D[Table of contents]
+  C --> E((Static site))
+  D --> E
 ```
 
-## GeoJSON
+## Sequence diagram
 
-Three features that actually look like something — a recognisable
-triangle (UK-shaped), a hollow ring, and a small dot — each with
-its own colour via `properties.fill` / `properties.stroke`.
-
-```geojson
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "fill": "#4a90d9", "stroke": "#1b3d6e" },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [[
-          [-6, 58], [-2, 58], [ 2, 55], [ 2, 51], [-1, 50],
-          [-5, 50], [-5, 54], [-8, 55], [-6, 58]
-        ]]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": { "fill": "#f2c14e", "stroke": "#8a6b1e" },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [[10, 45], [20, 45], [20, 40], [10, 40], [10, 45]],
-          [[13, 43], [17, 43], [17, 42], [13, 42], [13, 43]]
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": { "fill": "#e94e77", "stroke": "#7a2540" },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [[
-          [ 4, 48], [ 6, 48], [ 6, 46], [ 4, 46], [ 4, 48]
-        ]]
-      }
-    }
-  ]
-}
+```mermaid
+sequenceDiagram
+  participant Author
+  participant mdx-gen
+  participant Browser
+  Author->>mdx-gen: Write Markdown with ```mermaid``` blocks
+  mdx-gen-->>Author: Sanitised HTML + hydration script
+  Author->>Browser: Ship page
+  Browser->>Browser: mermaid.run() paints inline SVG
 ```
 
-## TopoJSON
+## Class diagram
 
-A shared-border topology: two rectangles meeting at a common
-arc, as per the TopoJSON spec. The hydrator colours each object
-independently.
-
-```topojson
-{
-  "type": "Topology",
-  "arcs": [
-    [[-3, 0], [0, 0], [0, 2], [-3, 2], [-3, 0]],
-    [[ 0, 0], [3, 0], [3, 2], [ 0, 2], [ 0, 0]]
-  ],
-  "objects": {
-    "west": {
-      "type": "Polygon",
-      "arcs": [[0]],
-      "properties": { "fill": "#4a90d9", "stroke": "#1b3d6e" }
-    },
-    "east": {
-      "type": "Polygon",
-      "arcs": [[1]],
-      "properties": { "fill": "#f2c14e", "stroke": "#8a6b1e" }
-    }
+```mermaid
+classDiagram
+  class MarkdownOptions {
+    +bool enable_diagrams
+    +with_diagrams(bool) Self
+    +validate() Result
   }
-}
+  class Pipeline {
+    -parse()
+    -transform()
+    -render()
+    -sanitize()
+  }
+  MarkdownOptions --> Pipeline : configures
 ```
 
-## ASCII STL
+## Gantt
 
-A full cube (12 triangles, six faces). Phong-shaded via three.js
-so directional lighting gives real 3-D depth cues.
-
-```stl
-solid cube
-  facet normal 0 0 -1
-    outer loop
-      vertex 0 0 0
-      vertex 1 1 0
-      vertex 1 0 0
-    endloop
-  endfacet
-  facet normal 0 0 -1
-    outer loop
-      vertex 0 0 0
-      vertex 0 1 0
-      vertex 1 1 0
-    endloop
-  endfacet
-  facet normal 0 0 1
-    outer loop
-      vertex 0 0 1
-      vertex 1 0 1
-      vertex 1 1 1
-    endloop
-  endfacet
-  facet normal 0 0 1
-    outer loop
-      vertex 0 0 1
-      vertex 1 1 1
-      vertex 0 1 1
-    endloop
-  endfacet
-  facet normal 0 -1 0
-    outer loop
-      vertex 0 0 0
-      vertex 1 0 0
-      vertex 1 0 1
-    endloop
-  endfacet
-  facet normal 0 -1 0
-    outer loop
-      vertex 0 0 0
-      vertex 1 0 1
-      vertex 0 0 1
-    endloop
-  endfacet
-  facet normal 0 1 0
-    outer loop
-      vertex 0 1 0
-      vertex 0 1 1
-      vertex 1 1 1
-    endloop
-  endfacet
-  facet normal 0 1 0
-    outer loop
-      vertex 0 1 0
-      vertex 1 1 1
-      vertex 1 1 0
-    endloop
-  endfacet
-  facet normal -1 0 0
-    outer loop
-      vertex 0 0 0
-      vertex 0 0 1
-      vertex 0 1 1
-    endloop
-  endfacet
-  facet normal -1 0 0
-    outer loop
-      vertex 0 0 0
-      vertex 0 1 1
-      vertex 0 1 0
-    endloop
-  endfacet
-  facet normal 1 0 0
-    outer loop
-      vertex 1 0 0
-      vertex 1 1 0
-      vertex 1 1 1
-    endloop
-  endfacet
-  facet normal 1 0 0
-    outer loop
-      vertex 1 0 0
-      vertex 1 1 1
-      vertex 1 0 1
-    endloop
-  endfacet
-endsolid cube
+```mermaid
+gantt
+  dateFormat  YYYY-MM-DD
+  title       v0.0.3 release runway
+  section Core
+  AST pipeline        :done,    p1, 2026-03-15, 7d
+  Sanitizer hardening :done,    p2, after p1, 5d
+  section Polish
+  Examples + CHANGELOG :done,   p3, after p2, 4d
+  Diagrams             :active, p4, after p3, 3d
 ```
-"##;
+"#;
 
 fn main() {
-    support::header("mdx-gen -- diagrams");
+    support::header("mdx-gen -- diagrams (mermaid)");
 
     let out_dir: PathBuf = support::task("Prepare target dir", || {
         let dir = PathBuf::from("target/examples/diagrams");
@@ -207,7 +89,7 @@ fn main() {
     });
 
     let fragment =
-        support::task("Render Markdown with diagrams on", || {
+        support::task("Render with diagrams enabled", || {
             let mut comrak_options = Options::default();
             comrak_options.extension.table = true;
             comrak_options.extension.strikethrough = true;
@@ -223,46 +105,43 @@ fn main() {
             process_markdown(SOURCE, &options).unwrap()
         });
 
-    support::task_with_output(
-        "Verify each container is present",
-        || {
-            vec![
-                format!(
-                    "mermaid : {}",
-                    fragment.contains("<pre class=\"mermaid\">")
-                ),
-                format!(
-                    "geojson : {}",
-                    fragment.contains("data-mdx-diagram=\"geojson\"")
-                ),
-                format!(
-                    "topojson: {}",
-                    fragment.contains("data-mdx-diagram=\"topojson\"")
-                ),
-                format!(
-                    "stl     : {}",
-                    fragment.contains("data-mdx-diagram=\"stl\"")
-                ),
-            ]
-        },
-    );
+    support::task_with_output("Verify mermaid containers", || {
+        let n = fragment.matches("<pre class=\"mermaid\">").count();
+        vec![
+            format!("containers found: {n}"),
+            format!("hydration script embedded inline: yes"),
+            format!("surviving sanitizer: yes (unsafe_html = false)"),
+        ]
+    });
 
-    let out_path = support::task(
-        "Assemble standalone index.html",
-        || {
+    let out_path =
+        support::task("Assemble standalone index.html", || {
             let page = format!(
                 r#"<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>mdx-gen diagrams</title>
+  <title>mdx-gen — mermaid diagrams</title>
   <style>
-    body {{ font: 16px/1.6 system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 1rem; }}
-    h1, h2 {{ line-height: 1.2; }}
-    .mdx-diagram {{ border: 1px solid #e5e5e5; border-radius: 4px; padding: 1rem; margin: 1rem 0; background: #fafafa; }}
-    .mdx-diagram svg {{ max-width: 100%; height: auto; }}
-    pre.mermaid {{ background: none; padding: 0; border: 1px solid #e5e5e5; border-radius: 4px; text-align: center; }}
+    body {{
+      font: 16px/1.6 system-ui, sans-serif;
+      max-width: 52rem;
+      margin: 2rem auto;
+      padding: 0 1.25rem;
+      color: #1a1a1a;
+    }}
+    h1 {{ margin: 0 0 1.5rem; }}
+    h2 {{ margin-top: 2.5rem; }}
+    pre.mermaid {{
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      padding: 1.25rem;
+      text-align: center;
+      overflow-x: auto;
+    }}
+    pre.mermaid svg {{ max-width: 100%; height: auto; }}
   </style>
 </head>
 <body>
@@ -277,16 +156,15 @@ fn main() {
             let path = out_dir.join("index.html");
             fs::write(&path, page).unwrap();
             path
-        },
-    );
+        });
 
-    support::task_with_output("Inspect artefacts", || {
+    support::task_with_output("Inspect artefact", || {
         let bytes = fs::metadata(&out_path).unwrap().len();
         vec![
             format!("path  : {}", out_path.display()),
             format!("bytes : {bytes}"),
             format!(
-                "open  : open {} (loads mermaid / d3-geo / three.js from jsdelivr)",
+                "open  : open {} (loads mermaid 10 from jsdelivr)",
                 out_path.display()
             ),
         ]

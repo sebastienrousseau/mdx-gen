@@ -11,21 +11,17 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ### Added
 
-- **Diagram code-block rendering.** `mdx-gen` now recognises fenced
-  code blocks with info strings `mermaid`, `geojson`, `topojson`,
-  and `stl` and rewrites them into sanitizer-safe HTML containers
-  that a small client-side JS module hydrates into inline SVG at
-  page-load time. This mirrors how github.com handles mermaid and
-  geojson natively. Enable with
-  [`MarkdownOptions::with_diagrams(true)`]; embed
+- **Mermaid diagram rendering.** Fenced code blocks tagged
+  `mermaid` are rewritten into sanitizer-safe
+  `<pre class="mermaid">…</pre>` containers that a small
+  client-side JS module hydrates into inline SVG at page-load
+  time. This mirrors how github.com renders mermaid in READMEs.
+  Enable with [`MarkdownOptions::with_diagrams(true)`]; embed
   [`mdx_gen::hydration_script_html()`] once per page. New
-  `mdx_gen::diagrams` module + `examples/diagrams.rs`. See
-  [`mdx_gen::diagrams`] rustdoc for the container contract and
-  why this is client-side rather than server-rasterised.
-- Sanitizer allow-list extended with `pre.mermaid`,
-  `div.mdx-diagram` / `div.mdx-diagram-{geojson,topojson,stl}`,
-  and `div[data-mdx-diagram]` so diagram containers survive
-  `allow_unsafe_html = false`.
+  `mdx_gen::diagrams` module + `examples/diagrams.rs` covering
+  flowchart / sequence / class / gantt.
+- Sanitizer allow-list extended with `pre.mermaid` so mermaid
+  containers survive `allow_unsafe_html = false`.
 
 ### Breaking
 
