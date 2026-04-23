@@ -524,7 +524,6 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
         // with unrestricted values — class attributes are CSS hooks,
         // they cannot execute script.
         .add_tag_attributes("span", &["class"])
-        .add_generic_attributes(["style"])
         .allowed_classes(allowed_classes);
 }
 
@@ -1077,6 +1076,27 @@ fn main() {
             !html.contains("class=\"danger\""),
             "non-whitelisted class dropped: {html}"
         );
+    }
+
+    #[test]
+    fn test_sanitizer_strips_style_attribute() {
+        // The default sanitizer no longer allows `style` on any tag.
+        // Clickjacking via position:fixed/z-index would otherwise be
+        // possible through raw HTML in user-supplied Markdown.
+        let markdown =
+            "<div style=\"position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;\">overlay</div>";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            !html.contains("style="),
+            "style attribute must be stripped: {html}"
+        );
+        // The div itself is still allowed; only the attribute goes.
+        assert!(html.contains("<div"), "div tag dropped: {html}");
     }
 
     #[test]
