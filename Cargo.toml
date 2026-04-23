@@ -44,6 +44,12 @@ exclude = [
     "/.git/*", "/.github/*", "/.gitignore", "/.vscode/*"
 ]
 
+# Examples share a `support.rs` helper module that is not itself a
+# runnable example. Auto-discovery would try to compile it as one
+# (and fail, because it has no `fn main()`), so each example is
+# declared explicitly below.
+autoexamples = false
+
 # -----------------------------------------------------------------------------
 # Dependencies
 # -----------------------------------------------------------------------------
@@ -70,13 +76,15 @@ path = "src/lib.rs"
 # -----------------------------------------------------------------------------
 
 [features]
-# Default feature set includes syntax highlighting.
-default = ["syntax_highlighting"]
+# Default feature set: syntax highlighting + YAML frontmatter. Users
+# who want a minimal build can opt out with `--no-default-features`
+# and then enable just the features they need.
+default = ["syntax_highlighting", "yaml_support"]
 
 # Enable syntax highlighting using syntect
 syntax_highlighting = ["syntect"]
 
-# Enable YAML support
+# Enable YAML support (frontmatter extraction + typed parsing).
 yaml_support = ["yaml_safe"]
 
 # -----------------------------------------------------------------------------
@@ -99,12 +107,49 @@ serde = { version = "1", features = ["derive"] }
 name = "markdown_benchmark"
 harness = false
 
-# Explicitly declare examples whose compilation requires an optional
-# feature. All other example files under `examples/` are picked up
-# by Cargo's auto-discovery without further configuration.
+# ── Examples ──────────────────────────────────────────────────────
+#
+# `autoexamples = false` in the [package] table above disables
+# auto-discovery so the shared `support.rs` helper is not compiled
+# as a standalone example. Every example must therefore be
+# declared here.
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "quickstart"
+path = "examples/quickstart.rs"
+
 [[example]]
 name = "blog"
+path = "examples/blog.rs"
 required-features = ["yaml_support"]
+
+[[example]]
+name = "docs"
+path = "examples/docs.rs"
+
+[[example]]
+name = "cms"
+path = "examples/cms.rs"
+
+[[example]]
+name = "styling"
+path = "examples/styling.rs"
+
+[[example]]
+name = "streaming"
+path = "examples/streaming.rs"
+
+[[example]]
+name = "errors"
+path = "examples/errors.rs"
+
+[[example]]
+name = "all"
+path = "examples/all.rs"
 
 [profile.bench]
 debug = true

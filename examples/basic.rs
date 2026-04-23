@@ -1,73 +1,54 @@
-// Copyright © 2024 - 2026 MDX Gen. All rights reserved.
-// SPDX-License-Identifier: Apache-2.0 OR MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2026 MDX Gen. All rights reserved.
+
+//! Minimal Markdown → HTML conversion.
+//!
+//! Run: `cargo run --example basic`
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! # Basic Example — Minimal Markdown → HTML conversion
-//!
-//! ## What this example is
-//!
-//! The smallest useful snippet: a handful of Markdown lines, default
-//! options, one call to [`process_markdown`], and the HTML printed to
-//! stdout. Use this file as the starting point when you just want to
-//! see whether mdx-gen fits your project.
-//!
-//! ## What it demonstrates
-//!
-//! - **One call, one String** — [`process_markdown`] takes `&str` and
-//!   returns HTML.
-//! - **Comrak extensions wired through** — tables, strikethrough, and
-//!   autolinks enabled via [`mdx_gen::Options`].
-//! - **No features you don't need** — syntax highlighting, custom
-//!   blocks, and table enhancement disabled so the output is plain
-//!   GFM HTML.
-//!
-//! ## When to use this pattern
-//!
-//! When you're evaluating the crate or writing a one-off converter
-//! and want the simplest possible wiring. Reach for `quickstart`,
-//! `blog`, or `docs` once you need the extras.
-//!
-//! ## Run it
-//!
-//! ```sh
-//! cargo run --example basic
-//! ```
+#[path = "support.rs"]
+mod support;
 
 use mdx_gen::{process_markdown, MarkdownOptions, Options};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🦀 Basic Markdown → HTML conversion");
-    println!("───────────────────────────────────");
-
-    let markdown = r#"# Welcome to MDX Gen
+const SOURCE: &str = "# Welcome to MDX Gen
 
 This is **bold**, this is *italic*, and this is ~~strikethrough~~.
-
-## Features
 
 - CommonMark core
 - GFM tables
 - Autolinks — https://docs.rs/mdx-gen
+";
 
-[Docs](https://docs.rs/mdx-gen) for details.
-"#;
+fn main() {
+    support::header("mdx-gen -- basic");
 
-    let mut comrak_options = Options::default();
-    comrak_options.extension.strikethrough = true;
-    comrak_options.extension.table = true;
-    comrak_options.extension.autolink = true;
+    let options = support::task("Build MarkdownOptions", || {
+        let mut comrak_options = Options::default();
+        comrak_options.extension.strikethrough = true;
+        comrak_options.extension.table = true;
+        comrak_options.extension.autolink = true;
+        MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_syntax_highlighting(false)
+            .with_comrak_options(comrak_options)
+    });
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(false)
-        .with_enhanced_tables(false)
-        .with_syntax_highlighting(false)
-        .with_comrak_options(comrak_options);
+    let html = support::task("Render Markdown to HTML", || {
+        process_markdown(SOURCE, &options).unwrap()
+    });
 
-    let html = process_markdown(markdown, &options)?;
-    println!("    ✅ Converted {} bytes of Markdown", markdown.len());
-    println!("    📄 Output:\n");
-    println!("{html}");
+    support::task_with_output("Inspect output", || {
+        vec![
+            format!("source: {} bytes", SOURCE.len()),
+            format!("html:   {} bytes", html.len()),
+            format!("<strong> present: {}", html.contains("<strong>")),
+            format!("<em> present: {}", html.contains("<em>")),
+            format!("<del> present: {}", html.contains("<del>")),
+        ]
+    });
 
-    Ok(())
+    support::summary(3);
 }

@@ -1,47 +1,14 @@
-// Copyright © 2024 - 2026 MDX Gen. All rights reserved.
-// SPDX-License-Identifier: Apache-2.0 OR MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2026 MDX Gen. All rights reserved.
+
+//! Blog post pipeline — frontmatter + ToC + highlighting + sanitize.
+//!
+//! Run: `cargo run --example blog`
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! # Blog — A blog post with frontmatter, ToC, and highlighting
-//!
-//! ## What this example is
-//!
-//! The end-to-end shape of a realistic blog pipeline:
-//!
-//! 1. Peel YAML frontmatter off the top of the source document.
-//! 2. Parse it into a typed [`Post`] struct for metadata
-//!    (title, slug, date, tags).
-//! 3. Render the body with a ToC, class-based syntax highlighting,
-//!    and the sanitiser on.
-//! 4. Assemble a standalone HTML page with the frontmatter fields
-//!    wired into `<title>`, `<meta>`, and an outline sidebar.
-//!
-//! ## What it demonstrates
-//!
-//! - [`extract_frontmatter`] + [`parse_frontmatter_as`] — split
-//!   the YAML header from the Markdown body and deserialise it
-//!   into a `#[derive(Deserialize)]` struct in one step.
-//! - [`process_markdown_with_toc`] — body + ToC from a single
-//!   AST pass.
-//! - [`MarkdownOptions::with_header_ids`] — anchor ids that
-//!   match [`Heading::id`] so the outline links land on the
-//!   rendered headings.
-//!
-//! ## Required feature
-//!
-//! ```toml
-//! [dependencies]
-//! mdx-gen = { version = "0.0.3", features = ["yaml_support"] }
-//! ```
-//!
-//! ## Run it
-//!
-//! ```sh
-//! cargo run --example blog --features yaml_support
-//! ```
-//!
-//! The full blog post is written to `target/examples/blog.html`.
+#[path = "support.rs"]
+mod support;
 
 use std::fs;
 use std::path::PathBuf;
@@ -52,8 +19,8 @@ use mdx_gen::{
 };
 use serde::{Deserialize, Serialize};
 
-// Inline sequences only — yaml_safe is a minimal parser that does
-// not accept block-style `- tags` under a mapping key.
+// yaml_safe is minimal — inline `[…]` sequences only; no block
+// `- tags` under a mapping key.
 const SOURCE: &str = r#"---
 title: "Shipping 0.0.3"
 slug: "shipping-003"
@@ -64,8 +31,7 @@ tags: [release, notes]
 
 # Shipping 0.0.3
 
-0.0.3 switches the syntax highlighter to class-based output. This
-post walks through **what changed** and *why*.
+0.0.3 switches the syntax highlighter to class-based output.
 
 ## What changed
 
@@ -74,16 +40,12 @@ inline `style="color:#…"`.
 
 ## How to migrate
 
-Generate a stylesheet once at build time:
-
-```rust
-let css = mdx_gen::theme_css("base16-ocean.dark").unwrap();
-std::fs::write("syntax.css", css)?;
-```
+Generate a stylesheet once at build time and serve it alongside
+your HTML.
 
 ## Anything else?
 
-Nope — just drop the CSS alongside your HTML.
+That's it.
 "#;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -96,57 +58,86 @@ struct Post {
     tags: Vec<String>,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🦀 Blog post pipeline");
-    println!("─────────────────────");
+fn main() {
+    support::header("mdx-gen -- blog");
 
-    // ── Step 1: Split YAML from Markdown ──────────────────────────
-    let (yaml, body) = extract_frontmatter(SOURCE);
-    let yaml = yaml.ok_or("missing frontmatter")?;
-    let post: Post = parse_frontmatter_as(yaml)?;
-    println!(
-        "    ✅ {title} — {date} by {author}",
-        title = post.title,
-        date = post.date,
-        author = post.author
-    );
-    println!("    🏷️  tags: {:?}", post.tags);
+    let (yaml, body) =
+        support::task("Split frontmatter from body", || {
+            let (yaml, body) = extract_frontmatter(SOURCE);
+            (
+                yaml.expect("missing frontmatter").to_owned(),
+                body.to_owned(),
+            )
+        });
 
-    // ── Step 2: Render body + ToC ─────────────────────────────────
-    let mut comrak_options = Options::default();
-    comrak_options.extension.table = true;
-    comrak_options.extension.strikethrough = true;
+    let post: Post = support::task("Parse frontmatter (typed)", || {
+        parse_frontmatter_as(&yaml).unwrap()
+    });
 
-    let options = MarkdownOptions::new()
-        .with_comrak_options(comrak_options)
-        .with_custom_blocks(false)
-        .with_enhanced_tables(true)
-        .with_syntax_highlighting(true)
-        .with_header_ids("")
-        .with_unsafe_html(false);
+    support::task_with_output("Inspect post metadata", || {
+        vec![
+            format!("title : {}", post.title),
+            format!("slug  : {}", post.slug),
+            format!("date  : {}", post.date),
+            format!("author: {}", post.author),
+            format!("tags  : {:?}", post.tags),
+        ]
+    });
 
-    let (body_html, toc) = process_markdown_with_toc(body, &options)?;
-    println!(
-        "    ✅ rendered {} bytes of HTML + {} headings",
-        body_html.len(),
-        toc.len()
-    );
+    let (html, toc) =
+        support::task("Render body + collect ToC", || {
+            let mut comrak_options = Options::default();
+            comrak_options.extension.table = true;
+            comrak_options.extension.strikethrough = true;
 
-    // ── Step 3: Compose the final page ────────────────────────────
-    let out_dir: PathBuf = PathBuf::from("target/examples");
-    fs::create_dir_all(&out_dir)?;
-    let out_path = out_dir.join("blog.html");
+            let options = MarkdownOptions::new()
+                .with_comrak_options(comrak_options)
+                .with_custom_blocks(false)
+                .with_enhanced_tables(true)
+                .with_syntax_highlighting(true)
+                .with_header_ids("")
+                .with_unsafe_html(false);
 
-    let page = render_page(&post, &toc, &body_html);
-    fs::write(&out_path, page)?;
-    println!("    ✅ wrote {}", out_path.display());
+            process_markdown_with_toc(&body, &options).unwrap()
+        });
 
-    Ok(())
+    support::task_with_output("Inspect outline", || {
+        toc.iter()
+            .map(|h| {
+                let indent =
+                    "  ".repeat(h.level.saturating_sub(1) as usize);
+                format!(
+                    "{indent}H{lvl} {text} (#{id})",
+                    lvl = h.level,
+                    text = h.text,
+                    id = h.id
+                )
+            })
+            .collect()
+    });
+
+    let out_path = support::task("Assemble page + write file", || {
+        let out_dir: PathBuf = PathBuf::from("target/examples");
+        fs::create_dir_all(&out_dir).unwrap();
+        let out_path = out_dir.join("blog.html");
+        fs::write(&out_path, render_page(&post, &toc, &html)).unwrap();
+        out_path
+    });
+
+    support::task_with_output("Verify artefact on disk", || {
+        let bytes = fs::metadata(&out_path).unwrap().len();
+        vec![
+            format!("path  : {}", out_path.display()),
+            format!("bytes : {bytes}"),
+        ]
+    });
+
+    support::summary(6);
 }
 
-/// Wraps the rendered body in a minimal HTML document with a
-/// `<head>` populated from `post` metadata and a sidebar outline
-/// built from the returned [`Heading`]s.
+/// Wraps the rendered body in a minimal HTML document with `<head>`
+/// populated from `post` metadata and a sidebar outline built from
+/// the returned [`Heading`]s.
 fn render_page(post: &Post, toc: &[Heading], body: &str) -> String {
     let outline = toc
         .iter()
@@ -169,7 +160,6 @@ fn render_page(post: &Post, toc: &[Heading], body: &str) -> String {
   <meta charset="utf-8">
   <title>{title}</title>
   <meta name="author" content="{author}">
-  <meta name="description" content="{title}">
   <meta property="article:published_time" content="{date}">
 </head>
 <body>
