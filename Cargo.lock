@@ -796,6 +796,7 @@ dependencies = [
  "log",
  "predicates",
  "regex",
+ "serde",
  "syntect",
  "tempfile",
  "thiserror",
