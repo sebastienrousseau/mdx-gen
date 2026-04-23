@@ -180,15 +180,20 @@ impl<'a> MarkdownOptions<'a> {
     }
 
     /// Validates that options are consistent.
-    pub fn validate(&self) -> Result<(), String> {
+    ///
+    /// Returns a [`commons::validation::ValidationError`] so errors
+    /// can flow through the EUXIS ecosystem's shared validation
+    /// machinery ([`commons::validation::Validator`] and friends).
+    pub fn validate(
+        &self,
+    ) -> Result<(), commons::validation::ValidationError> {
         if self.enable_enhanced_tables
             && !self.comrak_options.extension.table
         {
-            return Err(
-                "Enhanced tables are enabled, but Comrak table \
-                 extension is disabled."
+            return Err(commons::validation::ValidationError::Custom(
+                "enhanced_tables is enabled but comrak.extension.table is disabled"
                     .to_string(),
-            );
+            ));
         }
         Ok(())
     }
@@ -440,9 +445,11 @@ fn pipeline<W: Write>(
     }
 
     // ── 1. Validate options ─────────────────────────────────────
-    if let Err(msg) = options.validate() {
-        warn!("Invalid MarkdownOptions: {}", msg);
-        return Err(MarkdownError::InvalidOptionsError(msg));
+    if let Err(err) = options.validate() {
+        warn!("Invalid MarkdownOptions: {}", err);
+        return Err(MarkdownError::InvalidOptionsError(
+            err.to_string(),
+        ));
     }
 
     // ── 2. Build comrak options ─────────────────────────────────

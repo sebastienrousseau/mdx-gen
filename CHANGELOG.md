@@ -9,6 +9,38 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+### Breaking
+
+- **MSRV raised to 1.88.0** (from 1.85.0). Required by the newly
+  vendored `commons` crate (EUXIS ecosystem shared utilities) which
+  ships on edition 2024. `build.rs`, `Cargo.toml` `rust-version`,
+  and the README install note all updated in lockstep.
+
+### Added
+
+- `crates/commons/` — vendored copy of the EUXIS `commons` utility
+  crate (upstream: github.com/sebastienrousseau/commons, v0.0.3).
+  Kept under `publish = false` in the workspace so mdx-gen can
+  evolve against the source without a separate registry release.
+  Pulled in with `error` + `validation` features only.
+- `impl From<commons::error::CommonError> for MarkdownError` — the
+  EUXIS-wide error type flows through `?` into mdx-gen's `Result`
+  types. Domain-specific variants stay intact
+  (`InvalidInput`/`Parse` → `ParseError`, `Io` → `IoError`, rest →
+  `ConversionError` with Display preserved).
+- `impl From<commons::validation::ValidationError> for MarkdownError`
+  for the validation bridge.
+
+### Changed
+
+- `MarkdownOptions::validate` now returns
+  `Result<(), commons::validation::ValidationError>` instead of
+  `Result<(), String>`. The single call site in the pipeline
+  converts via the new `From` impl. Callers that previously
+  pattern-matched on `String` need to `.to_string()` the error.
+- Closed PR #17 (pre-release proposal to add commons) — the
+  vendored + migrated form landed directly on this branch.
+
 ## [0.0.3] — 2026-04-23
 
 ### Breaking

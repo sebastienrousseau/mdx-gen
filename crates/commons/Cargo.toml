@@ -1,0 +1,130 @@
+[package]
+# Metadata about the package.
+authors = ["Commons Contributors"]
+categories = ["development-tools", "rust-patterns"]
+description = """
+    Shared Rust utilities and common patterns for the ecosystem.
+    Provides reusable components for error handling, configuration,
+    logging, validation, retry logic, and more.
+"""
+documentation = "https://docs.rs/euxis-commons"
+edition = "2024"
+homepage = "https://github.com/sebastienrousseau/commons"
+keywords = ["utilities", "common", "ecosystem", "euxis"]
+license = "MIT OR Apache-2.0"
+name = "euxis-commons"
+readme = "README.md"
+repository = "https://github.com/sebastienrousseau/commons"
+rust-version = "1.88.0"
+version = "0.0.3"
+# Vendored copy of github.com/sebastienrousseau/commons — kept in
+# the workspace so mdx-gen can ship without a separate commons
+# registry release.
+publish = false
+include = [
+    "/LICENSE-APACHE",
+    "/LICENSE-MIT",
+    "/Cargo.toml",
+    "/README.md",
+    "/src/**",
+]
+
+[lib]
+# Library configuration.
+crate-type = ["lib"]
+name = "commons"
+path = "src/lib.rs"
+
+[features]
+default = ["full"]
+full = ["config", "error", "logging", "time", "collections", "validation", "retry", "id", "env", "fs"]
+config = ["serde", "toml"]
+error = ["thiserror"]
+logging = ["time"]
+time = []
+collections = []
+validation = []
+retry = []
+id = []
+env = []
+fs = []
+
+[dependencies]
+thiserror = { version = "2.0", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+toml = { version = "0.8", optional = true }
+
+[dev-dependencies]
+tempfile = "3.15"
+
+[package.metadata.docs.rs]
+# Build docs with all crate features enabled to cover the entire API.
+all-features = true
+rustdoc-args = [
+    "--generate-link-to-definition",
+    "--cfg", "docsrs",
+]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
+
+# Linting config
+[lints.rust]
+
+## Warn
+missing_copy_implementations = "warn"
+missing_docs = "warn"
+unstable_features = "warn"
+unused_extern_crates = "warn"
+
+## Allow
+bare_trait_objects = "allow"
+elided_lifetimes_in_paths = "allow"
+non_camel_case_types = "allow"
+non_upper_case_globals = "allow"
+trivial_bounds = "allow"
+unsafe_code = "deny"
+
+## Forbid
+missing_debug_implementations = "forbid"
+non_ascii_idents = "forbid"
+unreachable_pub = "forbid"
+
+## Deny
+dead_code = "deny"
+deprecated_in_future = "deny"
+ellipsis_inclusive_range_patterns = "deny"
+explicit_outlives_requirements = "deny"
+future_incompatible = { level = "deny", priority = -1 }
+keyword_idents = { level = "deny", priority = -1 }
+macro_use_extern_crate = "deny"
+meta_variable_misuse = "deny"
+noop_method_call = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+rust_2021_compatibility = { level = "deny", priority = -1 }
+single_use_lifetimes = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+unused = { level = "deny", priority = -1 }
+unused_features = "deny"
+unused_import_braces = "deny"
+unused_labels = "deny"
+unused_lifetimes = "deny"
+unused_macro_rules = "deny"
+unused_qualifications = "deny"
+variant_size_differences = "deny"
+
+[lints.clippy]
+# Groups get priority = -1 so the explicit per-lint entries below
+# (e.g. `redundant_feature_names = "allow"`) actually take effect.
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+# `cargo` enables redundant_feature_names, which the workspace
+# sees firing on sibling crates' feature names (mdx-gen's
+# `yaml_support`). Renaming those features would break downstream
+# callers, so the lint is locally silenced here.
+redundant_feature_names = "allow"
+
+# Profile sections live only in the workspace root Cargo.toml —
+# cargo ignores per-package profiles when the crate is a workspace
+# member, so they have been stripped here to silence the noise.

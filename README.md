@@ -31,7 +31,7 @@ Or add to `Cargo.toml`:
 mdx-gen = "0.0.3"
 ```
 
-You need [Rust](https://rustup.rs/) 1.85.0 or later. Works on macOS, Linux, and Windows.
+You need [Rust](https://rustup.rs/) 1.88.0 or later. Works on macOS, Linux, and Windows.
 
 ---
 

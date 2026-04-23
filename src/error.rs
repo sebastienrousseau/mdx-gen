@@ -51,6 +51,40 @@ pub enum MarkdownError {
     IoError(#[from] std::io::Error),
 }
 
+/// Map a shared [`commons::error::CommonError`] into a domain
+/// [`MarkdownError`] so callers upstream in the EUXIS ecosystem can
+/// propagate failures with `?` into mdx-gen's `Result` types.
+///
+/// The mapping keeps domain-specific variants intact:
+///
+/// * `InvalidInput` / `Parse` → [`MarkdownError::ParseError`]
+/// * `Io` → [`MarkdownError::IoError`]
+/// * everything else → [`MarkdownError::ConversionError`] with the
+///   original `Display` form preserved (no information loss).
+impl From<commons::error::CommonError> for MarkdownError {
+    fn from(err: commons::error::CommonError) -> Self {
+        use commons::error::CommonError;
+        match err {
+            CommonError::InvalidInput(msg)
+            | CommonError::Parse(msg) => MarkdownError::ParseError(msg),
+            CommonError::Io(e) => MarkdownError::IoError(e),
+            other => MarkdownError::ConversionError(other.to_string()),
+        }
+    }
+}
+
+/// Map a shared [`commons::validation::ValidationError`] into a
+/// domain [`MarkdownError::InvalidOptionsError`].
+///
+/// This is the bridge that lets
+/// [`MarkdownOptions::validate`](crate::MarkdownOptions::validate)
+/// feed its result into the mdx-gen error pipeline via `?`.
+impl From<commons::validation::ValidationError> for MarkdownError {
+    fn from(err: commons::validation::ValidationError) -> Self {
+        MarkdownError::InvalidOptionsError(err.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,5 +120,46 @@ mod tests {
         for (error, expected) in cases {
             assert_eq!(format!("{error}"), expected);
         }
+    }
+
+    #[test]
+    fn test_from_common_error_parse() {
+        let err: MarkdownError =
+            commons::error::CommonError::InvalidInput("bad".into())
+                .into();
+        assert!(matches!(err, MarkdownError::ParseError(_)));
+
+        let err: MarkdownError =
+            commons::error::CommonError::Parse("syntax".into()).into();
+        assert!(matches!(err, MarkdownError::ParseError(_)));
+    }
+
+    #[test]
+    fn test_from_common_error_io() {
+        let source =
+            std::io::Error::new(std::io::ErrorKind::BrokenPipe, "nope");
+        let err: MarkdownError =
+            commons::error::CommonError::Io(source).into();
+        assert!(matches!(err, MarkdownError::IoError(_)));
+    }
+
+    #[test]
+    fn test_from_common_error_other_preserves_display() {
+        let err: MarkdownError =
+            commons::error::CommonError::NotFound("x".into()).into();
+        match err {
+            MarkdownError::ConversionError(msg) => {
+                assert!(msg.contains("Not found"));
+                assert!(msg.contains('x'));
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_from_validation_error() {
+        let err: MarkdownError =
+            commons::validation::ValidationError::Empty.into();
+        assert!(matches!(err, MarkdownError::InvalidOptionsError(_)));
     }
 }
