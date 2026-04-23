@@ -49,6 +49,11 @@ If you've identified a bug or have a specific code improvement in mind, we welco
 - Fork the repo.
 - Clone the `MDX Gen` repo by running:
   `git clone https://github.com/sebastienrousseau/mdx-gen.git`
+- Install the pre-push hook so local checks match CI exactly:
+  `git config core.hooksPath .githooks`
+- The repository pins the `stable` Rust channel via `rust-toolchain.toml`;
+  contributors get a matching toolchain (with `clippy` + `rustfmt`)
+  the first time they run any `cargo` command.
 - Edit files in the `src/` folder. The `src/` folder contains the source code for `MDX Gen`.
 - Submit a pull request, and we'll review and merge your changes if they fit with our vision for `MDX Gen`.
 
