@@ -128,12 +128,25 @@ path = "examples/blog.rs"
 required-features = ["yaml_support"]
 
 [[example]]
+name = "typed"
+path = "examples/typed.rs"
+required-features = ["yaml_support"]
+
+[[example]]
 name = "docs"
 path = "examples/docs.rs"
 
 [[example]]
+name = "alerts"
+path = "examples/alerts.rs"
+
+[[example]]
 name = "cms"
 path = "examples/cms.rs"
+
+[[example]]
+name = "security"
+path = "examples/security.rs"
 
 [[example]]
 name = "styling"
@@ -142,6 +155,14 @@ path = "examples/styling.rs"
 [[example]]
 name = "streaming"
 path = "examples/streaming.rs"
+
+[[example]]
+name = "pipe"
+path = "examples/pipe.rs"
+
+[[example]]
+name = "bulk"
+path = "examples/bulk.rs"
 
 [[example]]
 name = "errors"

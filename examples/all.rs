@@ -9,13 +9,22 @@ use std::process::Command;
 use std::time::Instant;
 
 const EXAMPLES: &[&str] = &[
+    // Onboarding
     "basic",
     "quickstart",
+    // Scenarios
     "blog",
+    "typed",
     "docs",
+    "alerts",
     "cms",
+    "security",
+    // Output channels
     "styling",
     "streaming",
+    "pipe",
+    // Performance + integrators
+    "bulk",
     "errors",
 ];
 
