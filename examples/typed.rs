@@ -16,13 +16,14 @@ use mdx_gen::frontmatter::{
 use serde::{Deserialize, Serialize};
 
 // Three different documents shaped for three different consumers.
-// yaml_safe is minimal — inline `[…]` sequences only.
 
 const POST: &str = r#"---
 title: "Shipping 0.0.3"
 slug: "shipping-003"
 date: "2026-04-23"
-tags: [release, notes]
+tags:
+  - release
+  - notes
 draft: false
 ---
 

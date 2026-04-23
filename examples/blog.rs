@@ -19,14 +19,14 @@ use mdx_gen::{
 };
 use serde::{Deserialize, Serialize};
 
-// yaml_safe is minimal — inline `[…]` sequences only; no block
-// `- tags` under a mapping key.
 const SOURCE: &str = r#"---
 title: "Shipping 0.0.3"
 slug: "shipping-003"
 date: "2026-04-23"
 author: "Sebastien Rousseau"
-tags: [release, notes]
+tags:
+  - release
+  - notes
 ---
 
 # Shipping 0.0.3

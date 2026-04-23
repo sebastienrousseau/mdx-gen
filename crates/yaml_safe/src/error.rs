@@ -17,6 +17,7 @@ pub type Result<T> = result::Result<T, Error>;
 #[derive(Debug)]
 enum ErrorImpl {
     Message(String),
+    MessageAt(String, Location),
     Io(io::Error),
 }
 
@@ -29,15 +30,6 @@ pub struct Location {
 }
 
 impl Location {
-    /// Creates a new `Location`.
-    pub fn new(index: usize, line: usize, column: usize) -> Self {
-        Self {
-            index,
-            line,
-            column,
-        }
-    }
-
     /// Returns the byte index where the error occurred.
     pub fn index(&self) -> usize {
         self.index
@@ -66,11 +58,29 @@ impl Error {
 
     /// Returns the location where the error occurred.
     pub fn location(&self) -> Option<Location> {
-        None
+        match &*self.0 {
+            ErrorImpl::MessageAt(_, loc) => Some(*loc),
+            _ => None,
+        }
     }
 
     pub(crate) fn msg(s: impl Display) -> Self {
         Error(Box::new(ErrorImpl::Message(s.to_string())))
+    }
+
+    pub(crate) fn msg_at(s: impl Display, loc: Location) -> Self {
+        Error(Box::new(ErrorImpl::MessageAt(s.to_string(), loc)))
+    }
+}
+
+impl Location {
+    /// Creates a new `Location`.
+    pub fn new(index: usize, line: usize, column: usize) -> Self {
+        Location {
+            index,
+            line,
+            column,
+        }
     }
 }
 
@@ -78,6 +88,13 @@ impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &*self.0 {
             ErrorImpl::Message(msg) => f.write_str(msg),
+            ErrorImpl::MessageAt(msg, loc) => {
+                write!(
+                    f,
+                    "{} at line {} column {}",
+                    msg, loc.line, loc.column
+                )
+            }
             ErrorImpl::Io(err) => write!(f, "I/O error: {}", err),
         }
     }
@@ -103,6 +120,9 @@ impl Clone for Error {
         match &*self.0 {
             ErrorImpl::Message(msg) => {
                 Error(Box::new(ErrorImpl::Message(msg.clone())))
+            }
+            ErrorImpl::MessageAt(msg, loc) => {
+                Error(Box::new(ErrorImpl::MessageAt(msg.clone(), *loc)))
             }
             ErrorImpl::Io(err) => {
                 Error(Box::new(ErrorImpl::Message(err.to_string())))

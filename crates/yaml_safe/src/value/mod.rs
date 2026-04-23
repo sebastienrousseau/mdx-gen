@@ -214,7 +214,9 @@ impl Value {
                                                 .or_insert(v);
                                         }
                                     } else {
-                                        return Err(Error::msg("expected mapping in merge element"));
+                                        return Err(Error::msg(
+                                            "expected mapping in merge element",
+                                        ));
                                     }
                                 }
                             }

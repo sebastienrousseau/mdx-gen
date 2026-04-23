@@ -97,9 +97,48 @@ fn emit_string(s: &str, out: &mut String) {
         return;
     }
     // Check if the string needs quoting
-    if needs_quoting(s) {
+    if !needs_quoting(s) {
+        out.push_str(s);
+        return;
+    }
+    // If the string contains control chars or special
+    // Unicode escapes, use double-quoted style
+    if needs_double_quoting(s) {
+        out.push('"');
+        for ch in s.chars() {
+            match ch {
+                '\0' => out.push_str("\\0"),
+                '\x07' => out.push_str("\\a"),
+                '\x08' => out.push_str("\\b"),
+                '\t' => out.push_str("\\t"),
+                '\n' => out.push_str("\\n"),
+                '\x0B' => out.push_str("\\v"),
+                '\x0C' => out.push_str("\\f"),
+                '\r' => out.push_str("\\r"),
+                '\x1B' => out.push_str("\\e"),
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\u{0085}' => out.push_str("\\N"),
+                '\u{00A0}' => out.push_str("\\_"),
+                '\u{2028}' => out.push_str("\\L"),
+                '\u{2029}' => out.push_str("\\P"),
+                c if c.is_control() => {
+                    let code = c as u32;
+                    if code <= 0xFF {
+                        out.push_str(&format!("\\x{:02x}", code));
+                    } else if code <= 0xFFFF {
+                        out.push_str(&format!("\\u{:04x}", code));
+                    } else {
+                        out.push_str(&format!("\\U{:08x}", code));
+                    }
+                }
+                c => out.push(c),
+            }
+        }
+        out.push('"');
+    } else {
+        // Single-quoted style
         out.push('\'');
-        // Escape single quotes by doubling
         for ch in s.chars() {
             if ch == '\'' {
                 out.push_str("''");
@@ -108,9 +147,17 @@ fn emit_string(s: &str, out: &mut String) {
             }
         }
         out.push('\'');
-    } else {
-        out.push_str(s);
     }
+}
+
+fn needs_double_quoting(s: &str) -> bool {
+    s.chars().any(|ch| {
+        ch.is_control()
+            || ch == '\u{0085}'
+            || ch == '\u{00A0}'
+            || ch == '\u{2028}'
+            || ch == '\u{2029}'
+    })
 }
 
 fn needs_quoting(s: &str) -> bool {
@@ -159,6 +206,11 @@ fn needs_quoting(s: &str) -> bool {
     }
     // Looks like a number
     if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
+        return true;
+    }
+    // Contains control chars or special Unicode that
+    // would be mangled by plain scalar parsing
+    if needs_double_quoting(s) {
         return true;
     }
     false

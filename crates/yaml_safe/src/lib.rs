@@ -16,8 +16,11 @@ pub mod mapping;
 pub mod number;
 pub mod ser;
 pub mod value;
+pub mod with;
 
-pub use de::{from_reader, from_slice, from_str, Deserializer};
+pub use de::{
+    from_reader, from_slice, from_str, Deserializer, DocumentIter,
+};
 pub use error::{Error, Location, Result};
 pub use mapping::Mapping;
 pub use number::Number;

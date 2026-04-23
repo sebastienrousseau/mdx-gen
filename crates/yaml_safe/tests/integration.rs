@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use yaml_safe::{
     from_reader, from_slice, from_str, from_value, to_string, to_value,
-    to_writer, Mapping, Number, Tag, TaggedValue, Value,
+    to_writer, Deserializer, Mapping, Number, Tag, TaggedValue, Value,
 };
 
 // ----------------------------------------------------------------
@@ -869,4 +869,454 @@ fn deserialize_inline_map() {
     let v: Value = from_str(yaml).unwrap();
     assert_eq!(v.get("a").unwrap().as_u64().unwrap(), 1);
     assert_eq!(v.get("b").unwrap().as_u64().unwrap(), 2);
+}
+
+// ----------------------------------------------------------------
+// Phase 1.3: Advanced Scalar Parsing
+// ----------------------------------------------------------------
+
+#[test]
+fn double_quote_unicode_escape_u() {
+    let v: Value = from_str("\"\\u0041\"").unwrap();
+    assert_eq!(v.as_str(), Some("A"));
+}
+
+#[test]
+fn double_quote_unicode_escape_upper_u() {
+    let v: Value = from_str("\"\\U0001F600\"").unwrap();
+    assert_eq!(v.as_str(), Some("\u{1F600}"));
+}
+
+#[test]
+fn double_quote_hex_escape_x() {
+    let v: Value = from_str("\"\\x41\"").unwrap();
+    assert_eq!(v.as_str(), Some("A"));
+}
+
+#[test]
+fn double_quote_null_escape() {
+    let v: Value = from_str("\"\\0\"").unwrap();
+    assert_eq!(v.as_str(), Some("\0"));
+}
+
+#[test]
+fn double_quote_bell_escape() {
+    let v: Value = from_str("\"\\a\"").unwrap();
+    assert_eq!(v.as_str(), Some("\x07"));
+}
+
+#[test]
+fn double_quote_backspace_escape() {
+    let v: Value = from_str("\"\\b\"").unwrap();
+    assert_eq!(v.as_str(), Some("\x08"));
+}
+
+#[test]
+fn double_quote_vertical_tab_escape() {
+    let v: Value = from_str("\"\\v\"").unwrap();
+    assert_eq!(v.as_str(), Some("\x0B"));
+}
+
+#[test]
+fn double_quote_form_feed_escape() {
+    let v: Value = from_str("\"\\f\"").unwrap();
+    assert_eq!(v.as_str(), Some("\x0C"));
+}
+
+#[test]
+fn double_quote_escape_escape() {
+    let v: Value = from_str("\"\\e\"").unwrap();
+    assert_eq!(v.as_str(), Some("\x1B"));
+}
+
+#[test]
+fn double_quote_next_line_escape() {
+    let v: Value = from_str("\"\\N\"").unwrap();
+    assert_eq!(v.as_str(), Some("\u{0085}"));
+}
+
+#[test]
+fn double_quote_nbsp_escape() {
+    let v: Value = from_str("\"\\_\"").unwrap();
+    assert_eq!(v.as_str(), Some("\u{00A0}"));
+}
+
+#[test]
+fn double_quote_line_separator_escape() {
+    let v: Value = from_str("\"\\L\"").unwrap();
+    assert_eq!(v.as_str(), Some("\u{2028}"));
+}
+
+#[test]
+fn double_quote_paragraph_separator_escape() {
+    let v: Value = from_str("\"\\P\"").unwrap();
+    assert_eq!(v.as_str(), Some("\u{2029}"));
+}
+
+#[test]
+fn double_quote_multiline_folding() {
+    let yaml = "\"foo\n  bar\"";
+    let v: Value = from_str(yaml).unwrap();
+    assert_eq!(v.as_str(), Some("foo bar"));
+}
+
+#[test]
+fn double_quote_multiline_empty_line_preserved() {
+    let yaml = "\"foo\n\n  bar\"";
+    let v: Value = from_str(yaml).unwrap();
+    assert_eq!(v.as_str(), Some("foo\nbar"));
+}
+
+#[test]
+fn double_quote_escaped_newline() {
+    let yaml = "\"foo\\\n  bar\"";
+    let v: Value = from_str(yaml).unwrap();
+    assert_eq!(v.as_str(), Some("foobar"));
+}
+
+#[test]
+fn block_scalar_explicit_indent() {
+    let yaml = "text: |2\n  hello\n  world\n";
+    let v: Value = from_str(yaml).unwrap();
+    assert_eq!(
+        v.get("text").unwrap().as_str().unwrap(),
+        "hello\nworld\n"
+    );
+}
+
+#[test]
+fn block_scalar_explicit_indent_with_strip() {
+    let yaml = "text: |2-\n  hello\n  world\n";
+    let v: Value = from_str(yaml).unwrap();
+    assert_eq!(
+        v.get("text").unwrap().as_str().unwrap(),
+        "hello\nworld"
+    );
+}
+
+#[test]
+fn block_scalar_explicit_indent_with_keep() {
+    let yaml = "text: |+2\n  hello\n  world\n\n";
+    let v: Value = from_str(yaml).unwrap();
+    let text = v.get("text").unwrap().as_str().unwrap();
+    assert!(text.starts_with("hello\nworld"));
+    assert!(text.ends_with('\n'));
+}
+
+#[test]
+fn block_scalar_folded_explicit_indent() {
+    let yaml = "text: >1\n hello\n world\n";
+    let v: Value = from_str(yaml).unwrap();
+    assert_eq!(
+        v.get("text").unwrap().as_str().unwrap(),
+        "hello world\n"
+    );
+}
+
+#[test]
+fn special_escape_roundtrip() {
+    // Test that strings with special chars roundtrip
+    let original = "bell:\x07 bs:\x08 esc:\x1B";
+    let yaml = to_string(&original).unwrap();
+    let back: String = from_str(&yaml).unwrap();
+    assert_eq!(back, original);
+}
+
+#[test]
+fn unicode_escape_roundtrip() {
+    let original = "next:\u{0085} nbsp:\u{00A0} ls:\u{2028}";
+    let yaml = to_string(&original).unwrap();
+    let back: String = from_str(&yaml).unwrap();
+    assert_eq!(back, original);
+}
+
+// ----------------------------------------------------------------
+// Phase 1.1: Anchors and Aliases
+// ----------------------------------------------------------------
+
+#[test]
+fn anchor_and_alias_simple() {
+    let yaml = "a: &val hello\nb: *val\n";
+    let v: Value = from_str(yaml).unwrap();
+    assert_eq!(v.get("a").unwrap().as_str(), Some("hello"));
+    assert_eq!(v.get("b").unwrap().as_str(), Some("hello"));
+}
+
+#[test]
+fn anchor_and_alias_mapping() {
+    let yaml = "\
+defaults: &defaults
+  adapter: postgres
+  host: localhost
+development:
+  <<: *defaults
+  database: dev_db
+";
+    let mut v: Value = from_str(yaml).unwrap();
+    v.apply_merge().unwrap();
+    let dev = v.get("development").unwrap();
+    assert_eq!(dev.get("adapter").unwrap().as_str(), Some("postgres"));
+    assert_eq!(dev.get("host").unwrap().as_str(), Some("localhost"));
+    assert_eq!(dev.get("database").unwrap().as_str(), Some("dev_db"));
+}
+
+#[test]
+fn anchor_and_alias_sequence() {
+    let yaml = "\
+- &first 1
+- &second 2
+- *first
+- *second
+";
+    let v: Vec<i64> = from_str(yaml).unwrap();
+    assert_eq!(v, vec![1, 2, 1, 2]);
+}
+
+#[test]
+fn anchor_alias_flow_style() {
+    let yaml = "{a: &x 10, b: *x}";
+    let v: Value = from_str(yaml).unwrap();
+    assert_eq!(v.get("a").unwrap().as_u64(), Some(10));
+    assert_eq!(v.get("b").unwrap().as_u64(), Some(10));
+}
+
+#[test]
+fn anchor_alias_nested_mapping() {
+    let yaml = "\
+base: &base
+  x: 1
+  y: 2
+derived:
+  <<: *base
+  y: 3
+";
+    let mut v: Value = from_str(yaml).unwrap();
+    v.apply_merge().unwrap();
+    let derived = v.get("derived").unwrap();
+    assert_eq!(derived.get("x").unwrap().as_u64(), Some(1));
+    // y should be overridden
+    assert_eq!(derived.get("y").unwrap().as_u64(), Some(3));
+}
+
+#[test]
+fn multiple_aliases_merge() {
+    let yaml = "\
+a: &a
+  x: 1
+b: &b
+  y: 2
+c:
+  <<: [*a, *b]
+  z: 3
+";
+    let mut v: Value = from_str(yaml).unwrap();
+    v.apply_merge().unwrap();
+    let c = v.get("c").unwrap();
+    assert_eq!(c.get("x").unwrap().as_u64(), Some(1));
+    assert_eq!(c.get("y").unwrap().as_u64(), Some(2));
+    assert_eq!(c.get("z").unwrap().as_u64(), Some(3));
+}
+
+#[test]
+fn unknown_alias_error() {
+    let yaml = "a: *nonexistent\n";
+    let result: Result<Value, _> = from_str(yaml);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("nonexistent"));
+}
+
+#[test]
+fn block_style_nested_mapping() {
+    let yaml = "\
+outer:
+  inner:
+    deep: value
+  sibling: ok
+";
+    let v: Value = from_str(yaml).unwrap();
+    let outer = v.get("outer").unwrap();
+    let inner = outer.get("inner").unwrap();
+    assert_eq!(inner.get("deep").unwrap().as_str(), Some("value"));
+    assert_eq!(outer.get("sibling").unwrap().as_str(), Some("ok"));
+}
+
+#[test]
+fn block_nested_struct_deserialize() {
+    let yaml = "\
+inner:
+  x: 1
+  y: 2
+label: point
+";
+    let back: Outer = from_str(yaml).unwrap();
+    assert_eq!(back.inner.x, 1);
+    assert_eq!(back.inner.y, 2);
+    assert_eq!(back.label, "point");
+}
+
+// ----------------------------------------------------------------
+// Phase 1.2: Multi-Document Support
+// ----------------------------------------------------------------
+
+#[test]
+fn multi_document_iter() {
+    let yaml = "---\nhello\n---\nworld\n---\n42\n";
+    let docs: Vec<Value> = Deserializer::from_str(yaml)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(docs.len(), 3);
+    assert_eq!(docs[0].as_str(), Some("hello"));
+    assert_eq!(docs[1].as_str(), Some("world"));
+    assert_eq!(docs[2].as_u64(), Some(42));
+}
+
+#[test]
+fn multi_document_with_end_markers() {
+    let yaml = "---\nfirst\n...\n---\nsecond\n...\n";
+    let docs: Vec<Value> = Deserializer::from_str(yaml)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(docs.len(), 2);
+    assert_eq!(docs[0].as_str(), Some("first"));
+    assert_eq!(docs[1].as_str(), Some("second"));
+}
+
+#[test]
+fn multi_document_mappings() {
+    let yaml = "\
+---
+name: Alice
+age: 30
+active: true
+---
+name: Bob
+age: 25
+active: false
+";
+    let mut deser = Deserializer::from_str(yaml);
+    let alice: Person = deser.next_document().unwrap().unwrap();
+    let bob: Person = deser.next_document().unwrap().unwrap();
+    assert!(deser.next_document::<Person>().is_none());
+
+    assert_eq!(alice.name, "Alice");
+    assert_eq!(alice.age, 30);
+    assert_eq!(bob.name, "Bob");
+    assert_eq!(bob.age, 25);
+}
+
+#[test]
+fn single_document_via_deserializer() {
+    let yaml = "hello";
+    let docs: Vec<Value> = Deserializer::from_str(yaml)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(docs.len(), 1);
+    assert_eq!(docs[0].as_str(), Some("hello"));
+}
+
+#[test]
+fn empty_documents() {
+    let yaml = "---\n...\n---\n...\n";
+    let docs: Vec<Value> = Deserializer::from_str(yaml)
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    for doc in &docs {
+        assert!(doc.is_null());
+    }
+}
+
+// ----------------------------------------------------------------
+// Phase 2.1: Error Location Tracking
+// ----------------------------------------------------------------
+
+#[test]
+fn error_includes_location() {
+    let yaml = "[unclosed";
+    let err = from_str::<Value>(yaml).unwrap_err();
+    let loc = err.location().expect("should have location");
+    assert_eq!(loc.line(), 1);
+    assert!(
+        err.to_string().contains("line 1"),
+        "error should mention line: {}",
+        err
+    );
+}
+
+#[test]
+fn error_location_multiline() {
+    let yaml = "a: 1\nb: {x: 1";
+    let err = from_str::<Value>(yaml).unwrap_err();
+    let loc = err.location().expect("should have location");
+    assert!(loc.line() >= 2);
+}
+
+// ----------------------------------------------------------------
+// Phase 2.2: with Module (singleton_map)
+// ----------------------------------------------------------------
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+enum Animal {
+    Cat,
+    Dog,
+    Bird(String),
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Zoo {
+    #[serde(with = "yaml_safe::with::singleton_map")]
+    animal: Animal,
+}
+
+#[test]
+fn singleton_map_unit_variant() {
+    let zoo = Zoo {
+        animal: Animal::Cat,
+    };
+    let yaml = to_string(&zoo).unwrap();
+    assert!(
+        yaml.contains("Cat"),
+        "should contain variant name: {}",
+        yaml
+    );
+    let back: Zoo = from_str(&yaml).unwrap();
+    assert_eq!(back, zoo);
+}
+
+#[test]
+fn singleton_map_newtype_variant() {
+    let zoo = Zoo {
+        animal: Animal::Bird("parrot".into()),
+    };
+    let yaml = to_string(&zoo).unwrap();
+    let back: Zoo = from_str(&yaml).unwrap();
+    assert_eq!(back, zoo);
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct OptZoo {
+    #[serde(with = "yaml_safe::with::singleton_map_optional")]
+    animal: Option<Animal>,
+}
+
+#[test]
+fn singleton_map_optional_some() {
+    let z = OptZoo {
+        animal: Some(Animal::Dog),
+    };
+    let yaml = to_string(&z).unwrap();
+    let back: OptZoo = from_str(&yaml).unwrap();
+    assert_eq!(back, z);
+}
+
+#[test]
+fn singleton_map_optional_none() {
+    let z = OptZoo { animal: None };
+    let yaml = to_string(&z).unwrap();
+    let back: OptZoo = from_str(&yaml).unwrap();
+    assert_eq!(back, z);
 }
