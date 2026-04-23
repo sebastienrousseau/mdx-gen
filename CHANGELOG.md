@@ -33,11 +33,33 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ### Changed
 
-- `MarkdownOptions::validate` now returns
-  `Result<(), commons::validation::ValidationError>` instead of
-  `Result<(), String>`. The single call site in the pipeline
-  converts via the new `From` impl. Callers that previously
-  pattern-matched on `String` need to `.to_string()` the error.
+- `MarkdownOptions::validate` now runs a comprehensive
+  multi-check pass via [`commons::validation::Validator`] and
+  returns `Result<(), Vec<(String, ValidationError)>>`. Every
+  failing check surfaces with the field that tripped it — the
+  validator no longer bails on the first problem. Nine checks
+  now run:
+    1. `enhanced_tables` requires `comrak.extension.table`.
+    2. `syntax_theme` (if set) must be a bundled syntect theme.
+    3. `syntax_theme` set with `enable_syntax_highlighting = false`
+       is rejected (silent no-op).
+    4. `sanitizer_config` set with `allow_unsafe_html = true` is
+       rejected (sanitizer would never run).
+    5. `header_ids` prefix rejects whitespace and HTML-breaking
+       characters (`"`, `'`, `<`, `>`, `&`, `=`).
+    6. `sanitizer_config.extra_tags` / `extra_tag_attributes`
+       must use valid HTML tag / attribute names.
+    7. `sanitizer_config.extra_generic_attributes` must be valid
+       HTML attribute names.
+    8. `sanitizer_config.extra_allowed_classes` tags must be
+       valid; class values must be non-empty without whitespace
+       or quotes.
+    9. `custom_block_config.class_overrides` values must be
+       non-empty without whitespace/quotes;
+       `title_overrides` values must be non-blank.
+  The pipeline converts the resulting `Vec` into a single
+  `MarkdownError::InvalidOptionsError` via a new `From` impl
+  that preserves every failing field in the message.
 - Closed PR #17 (pre-release proposal to add commons) — the
   vendored + migrated form landed directly on this branch.
 

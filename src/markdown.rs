@@ -179,23 +179,327 @@ impl<'a> MarkdownOptions<'a> {
         self
     }
 
-    /// Validates that options are consistent.
+    /// Validates that options are internally consistent and that
+    /// every string the pipeline will splice into HTML is well-
+    /// formed.
     ///
-    /// Returns a [`commons::validation::ValidationError`] so errors
-    /// can flow through the EUXIS ecosystem's shared validation
-    /// machinery ([`commons::validation::Validator`] and friends).
+    /// Uses [`commons::validation::Validator`] so every failing
+    /// check is reported in one pass — callers get the full list
+    /// of problems, not just the first. Each entry in the returned
+    /// `Vec` is `(field_name, ValidationError)`.
+    ///
+    /// # Checks
+    ///
+    /// 1. `enhanced_tables` requires `comrak.extension.table`.
+    /// 2. `syntax_theme`, if set, must name a theme bundled with
+    ///    syntect (feature-gated).
+    /// 3. `syntax_theme` set but `enable_syntax_highlighting =
+    ///    false` is a silent no-op — rejected so the mistake
+    ///    surfaces.
+    /// 4. `sanitizer_config` set but `allow_unsafe_html = true`
+    ///    skips sanitization entirely — rejected.
+    /// 5. `header_ids` prefix must not contain whitespace or any
+    ///    of `" ' < > & =` (would break the emitted `id="…"`).
+    /// 6. `sanitizer_config.extra_tags` / `extra_tag_attributes`
+    ///    keys must be valid HTML names; attribute lists must
+    ///    contain only valid HTML names.
+    /// 7. `sanitizer_config.extra_generic_attributes` must be
+    ///    valid HTML names.
+    /// 8. `sanitizer_config.extra_allowed_classes` keys must be
+    ///    valid HTML names; class values must be non-empty and
+    ///    free of whitespace / quote characters.
+    /// 9. `custom_block_config` override values must be non-empty
+    ///    and free of whitespace / quote characters (class
+    ///    overrides) or non-empty (title overrides).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(errors)` when any check fails. The pipeline
+    /// converts the list into a single
+    /// [`MarkdownError::InvalidOptionsError`] via the `From` impl
+    /// in [`crate::error`].
     pub fn validate(
         &self,
-    ) -> Result<(), commons::validation::ValidationError> {
-        if self.enable_enhanced_tables
-            && !self.comrak_options.extension.table
-        {
-            return Err(commons::validation::ValidationError::Custom(
-                "enhanced_tables is enabled but comrak.extension.table is disabled"
-                    .to_string(),
-            ));
+    ) -> Result<(), Vec<(String, commons::validation::ValidationError)>>
+    {
+        use commons::validation::{ValidationError, Validator};
+
+        let mut v = Validator::new();
+
+        // 1. enhanced_tables requires comrak.extension.table
+        v.check("enable_enhanced_tables", || {
+            if self.enable_enhanced_tables
+                && !self.comrak_options.extension.table
+            {
+                Err(ValidationError::Custom(
+                    "enhanced_tables = true requires comrak_options.extension.table = true"
+                        .into(),
+                ))
+            } else {
+                Ok(())
+            }
+        });
+
+        // 2. syntax_theme must be a bundled theme.
+        #[cfg(feature = "syntax_highlighting")]
+        v.check("syntax_theme", || {
+            if let Some(ref theme) = self.syntax_theme {
+                let available =
+                    crate::highlight::SyntectAdapter::available_themes(
+                    );
+                if !available.contains(&theme.as_str()) {
+                    return Err(ValidationError::NotInSet {
+                        allowed: available
+                            .iter()
+                            .map(|s| (*s).to_string())
+                            .collect(),
+                    });
+                }
+            }
+            Ok(())
+        });
+
+        // 3. syntax_theme + highlighter disabled is a no-op.
+        v.check("syntax_theme", || {
+            if !self.enable_syntax_highlighting
+                && self.syntax_theme.is_some()
+            {
+                Err(ValidationError::Custom(
+                    "syntax_theme is set but enable_syntax_highlighting = false (theme would be ignored)"
+                        .into(),
+                ))
+            } else {
+                Ok(())
+            }
+        });
+
+        // 4. sanitizer_config + unsafe_html is a no-op (sanitizer
+        //    never runs when unsafe_html is true).
+        v.check("sanitizer_config", || {
+            if self.allow_unsafe_html && self.sanitizer_config.is_some()
+            {
+                Err(ValidationError::Custom(
+                    "sanitizer_config is set but allow_unsafe_html = true (sanitizer is skipped)"
+                        .into(),
+                ))
+            } else {
+                Ok(())
+            }
+        });
+
+        // 5. header_ids prefix — no chars that would escape out of
+        //    the `id="…"` attribute.
+        v.check("header_ids", || {
+            if let Some(ref prefix) = self.header_ids {
+                if let Some(c) = prefix.chars().find(|c| {
+                    c.is_whitespace()
+                        || matches!(
+                            c,
+                            '"' | '\''
+                                | '<'
+                                | '>'
+                                | '&'
+                                | '='
+                        )
+                }) {
+                    return Err(ValidationError::InvalidPattern {
+                        pattern: format!(
+                            "no whitespace or HTML-special chars (found {c:?})"
+                        ),
+                    });
+                }
+            }
+            Ok(())
+        });
+
+        // 6. & 7. & 8. — SanitizerConfig.
+        if let Some(ref cfg) = self.sanitizer_config {
+            check_tag_list(
+                &mut v,
+                "sanitizer_config.extra_tags",
+                &cfg.extra_tags,
+            );
+            check_tag_attr_map(
+                &mut v,
+                "sanitizer_config.extra_tag_attributes",
+                &cfg.extra_tag_attributes,
+            );
+            check_attr_list(
+                &mut v,
+                "sanitizer_config.extra_generic_attributes",
+                &cfg.extra_generic_attributes,
+            );
+            check_allowed_classes_map(
+                &mut v,
+                "sanitizer_config.extra_allowed_classes",
+                &cfg.extra_allowed_classes,
+            );
         }
-        Ok(())
+
+        // 9. CustomBlockConfig override values.
+        for (block_type, class) in
+            &self.custom_block_config.class_overrides
+        {
+            let field = format!(
+                "custom_block_config.class_overrides[{block_type:?}]"
+            );
+            let c = class.clone();
+            v.check(&field, move || {
+                if c.is_empty() {
+                    return Err(ValidationError::Empty);
+                }
+                if let Some(ch) = c.chars().find(|c| {
+                    c.is_whitespace() || matches!(c, '"' | '\'')
+                }) {
+                    return Err(ValidationError::InvalidPattern {
+                        pattern: format!(
+                            "non-empty, no whitespace or quotes (found {ch:?})"
+                        ),
+                    });
+                }
+                Ok(())
+            });
+        }
+        for (block_type, title) in
+            &self.custom_block_config.title_overrides
+        {
+            let field = format!(
+                "custom_block_config.title_overrides[{block_type:?}]"
+            );
+            let t = title.clone();
+            v.check(&field, move || {
+                if t.trim().is_empty() {
+                    return Err(ValidationError::Empty);
+                }
+                Ok(())
+            });
+        }
+
+        v.finish()
+    }
+}
+
+/// ASCII-alphabetic first character, ASCII alphanumeric + `-` + `_`
+/// after. Empty strings rejected. Conservative shape for HTML tag
+/// and attribute names.
+fn is_html_name(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn check_tag_list(
+    v: &mut commons::validation::Validator,
+    field: &str,
+    tags: &[String],
+) {
+    for (i, tag) in tags.iter().enumerate() {
+        let f = format!("{field}[{i}]");
+        let t = tag.clone();
+        v.check(&f, move || {
+            if !is_html_name(&t) {
+                Err(commons::validation::ValidationError::InvalidPattern {
+                    pattern: format!(
+                        "valid HTML tag name (got {t:?})"
+                    ),
+                })
+            } else {
+                Ok(())
+            }
+        });
+    }
+}
+
+fn check_attr_list(
+    v: &mut commons::validation::Validator,
+    field: &str,
+    attrs: &[String],
+) {
+    for (i, attr) in attrs.iter().enumerate() {
+        let f = format!("{field}[{i}]");
+        let a = attr.clone();
+        v.check(&f, move || {
+            if !is_html_name(&a) {
+                Err(commons::validation::ValidationError::InvalidPattern {
+                    pattern: format!(
+                        "valid HTML attribute name (got {a:?})"
+                    ),
+                })
+            } else {
+                Ok(())
+            }
+        });
+    }
+}
+
+fn check_tag_attr_map(
+    v: &mut commons::validation::Validator,
+    field: &str,
+    map: &HashMap<String, Vec<String>>,
+) {
+    for (tag, attrs) in map {
+        let f_tag = format!("{field}.{tag}");
+        let t = tag.clone();
+        v.check(&f_tag, move || {
+            if !is_html_name(&t) {
+                Err(commons::validation::ValidationError::InvalidPattern {
+                    pattern: format!(
+                        "valid HTML tag name (got {t:?})"
+                    ),
+                })
+            } else {
+                Ok(())
+            }
+        });
+        check_attr_list(v, &f_tag, attrs);
+    }
+}
+
+fn check_allowed_classes_map(
+    v: &mut commons::validation::Validator,
+    field: &str,
+    map: &HashMap<String, Vec<String>>,
+) {
+    for (tag, classes) in map {
+        let f_tag = format!("{field}.{tag}");
+        let t = tag.clone();
+        v.check(&f_tag, move || {
+            if !is_html_name(&t) {
+                Err(commons::validation::ValidationError::InvalidPattern {
+                    pattern: format!(
+                        "valid HTML tag name (got {t:?})"
+                    ),
+                })
+            } else {
+                Ok(())
+            }
+        });
+        for (i, class) in classes.iter().enumerate() {
+            let f = format!("{f_tag}[{i}]");
+            let c = class.clone();
+            v.check(&f, move || {
+                if c.is_empty() {
+                    return Err(
+                        commons::validation::ValidationError::Empty,
+                    );
+                }
+                if let Some(ch) = c.chars().find(|c| {
+                    c.is_whitespace() || matches!(c, '"' | '\'')
+                }) {
+                    return Err(
+                        commons::validation::ValidationError::InvalidPattern {
+                            pattern: format!(
+                                "non-empty, no whitespace or quotes (got {ch:?})"
+                            ),
+                        },
+                    );
+                }
+                Ok(())
+            });
+        }
     }
 }
 
@@ -445,11 +749,11 @@ fn pipeline<W: Write>(
     }
 
     // ── 1. Validate options ─────────────────────────────────────
-    if let Err(err) = options.validate() {
-        warn!("Invalid MarkdownOptions: {}", err);
-        return Err(MarkdownError::InvalidOptionsError(
-            err.to_string(),
-        ));
+    if let Err(errors) = options.validate() {
+        for (field, err) in &errors {
+            warn!("Invalid MarkdownOptions.{field}: {err}");
+        }
+        return Err(MarkdownError::from(errors));
     }
 
     // ── 2. Build comrak options ─────────────────────────────────
@@ -711,6 +1015,7 @@ fn build_custom_sanitizer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CustomBlockType;
 
     #[test]
     fn test_process_markdown_with_all_features() {
@@ -789,7 +1094,193 @@ fn main() {
                 opts.extension.table = false;
                 opts
             });
-        assert!(options.validate().is_err());
+        let errors = options.validate().unwrap_err();
+        assert!(errors
+            .iter()
+            .any(|(f, _)| f == "enable_enhanced_tables"));
+    }
+
+    #[test]
+    fn test_validation_default_options_pass() {
+        // Defaults should pass every check in validate() — the
+        // suite is "tight" but not hostile to normal config.
+        // Note: defaults have enable_enhanced_tables = true but
+        // Options::default() has extension.table = false, so this
+        // catches check #1 by design. Enable the extension to see
+        // the all-green path.
+        let mut comrak = Options::default();
+        comrak.extension.table = true;
+        let options =
+            MarkdownOptions::new().with_comrak_options(comrak);
+        assert!(
+            options.validate().is_ok(),
+            "{:?}",
+            options.validate().unwrap_err()
+        );
+    }
+
+    #[test]
+    fn test_validation_unknown_syntax_theme() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_custom_theme("no-such-theme-exists".into());
+        let errors = options.validate().unwrap_err();
+        assert!(
+            errors.iter().any(|(f, _)| f == "syntax_theme"),
+            "expected syntax_theme failure, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_validation_theme_without_highlighter_disabled() {
+        // syntax_theme set + syntax_highlighting = false is a
+        // silent no-op — rejected.
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_syntax_highlighting(false)
+            .with_custom_theme("base16-ocean.dark".into());
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f == "syntax_theme"));
+    }
+
+    #[test]
+    fn test_validation_sanitizer_with_unsafe_html() {
+        // sanitizer_config set + allow_unsafe_html = true skips
+        // sanitization entirely — reject the silent no-op.
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_unsafe_html(true)
+            .with_sanitizer_config(
+                SanitizerConfig::new().with_tag("main"),
+            );
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f == "sanitizer_config"));
+    }
+
+    #[test]
+    fn test_validation_header_ids_bad_chars() {
+        for bad in [
+            "user content ", // whitespace
+            "quo\"te-",
+            "ang<le-",
+            "amp&-",
+        ] {
+            let options = MarkdownOptions::new()
+                .with_enhanced_tables(false)
+                .with_custom_blocks(false)
+                .with_header_ids(bad);
+            let errors = options.validate().unwrap_err();
+            assert!(
+                errors.iter().any(|(f, _)| f == "header_ids"),
+                "expected header_ids failure for {bad:?}, got {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validation_header_ids_clean_prefix_ok() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_header_ids("user-content-");
+        assert!(options.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validation_sanitizer_extra_tag_invalid() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new().with_tag("has space"),
+            );
+        let errors = options.validate().unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|(f, _)| f
+                    .starts_with("sanitizer_config.extra_tags"))
+        );
+    }
+
+    #[test]
+    fn test_validation_sanitizer_extra_generic_attribute_invalid() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new().with_generic_attribute(""),
+            );
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("sanitizer_config.extra_generic_attributes")));
+    }
+
+    #[test]
+    fn test_validation_sanitizer_allowed_class_with_whitespace() {
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_blocks(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new()
+                    .with_allowed_class("span", "has space"),
+            );
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("sanitizer_config.extra_allowed_classes")));
+    }
+
+    #[test]
+    fn test_validation_custom_block_class_override_empty() {
+        let cfg = CustomBlockConfig::new()
+            .with_class(CustomBlockType::Note, "");
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_block_config(cfg);
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("custom_block_config.class_overrides")));
+    }
+
+    #[test]
+    fn test_validation_custom_block_title_override_blank() {
+        let cfg = CustomBlockConfig::new()
+            .with_title(CustomBlockType::Warning, "   ");
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(false)
+            .with_custom_block_config(cfg);
+        let errors = options.validate().unwrap_err();
+        assert!(errors.iter().any(|(f, _)| f
+            .starts_with("custom_block_config.title_overrides")));
+    }
+
+    #[test]
+    fn test_validation_reports_all_failures_at_once() {
+        // Three independent violations in one options instance.
+        // The validator must collect all of them, not bail on the
+        // first.
+        let cfg = CustomBlockConfig::new()
+            .with_class(CustomBlockType::Note, "");
+        let options = MarkdownOptions::new()
+            .with_enhanced_tables(true) // ← 1: needs comrak.extension.table
+            .with_header_ids("a b") // ← 2: whitespace
+            .with_custom_block_config(cfg) // ← 3: empty override
+            .with_comrak_options({
+                let mut opts = Options::default();
+                opts.extension.table = false;
+                opts
+            });
+        let errors = options.validate().unwrap_err();
+        assert!(
+            errors.len() >= 3,
+            "expected 3+ errors, got {errors:?}"
+        );
     }
 
     #[test]

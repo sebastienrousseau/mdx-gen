@@ -76,12 +76,35 @@ impl From<commons::error::CommonError> for MarkdownError {
 /// Map a shared [`commons::validation::ValidationError`] into a
 /// domain [`MarkdownError::InvalidOptionsError`].
 ///
-/// This is the bridge that lets
-/// [`MarkdownOptions::validate`](crate::MarkdownOptions::validate)
-/// feed its result into the mdx-gen error pipeline via `?`.
+/// This is the bridge that lets ecosystem-wide single-shot
+/// validation errors feed into the mdx-gen error pipeline via `?`.
 impl From<commons::validation::ValidationError> for MarkdownError {
     fn from(err: commons::validation::ValidationError) -> Self {
         MarkdownError::InvalidOptionsError(err.to_string())
+    }
+}
+
+/// Map the multi-error form produced by
+/// [`commons::validation::Validator::finish`] into a domain
+/// [`MarkdownError::InvalidOptionsError`]. Every failing check is
+/// joined into a single human-readable message with the field name
+/// preserved.
+///
+/// This is what
+/// [`MarkdownOptions::validate`](crate::MarkdownOptions::validate)
+/// returns; the pipeline converts via `?`.
+impl From<Vec<(String, commons::validation::ValidationError)>>
+    for MarkdownError
+{
+    fn from(
+        errors: Vec<(String, commons::validation::ValidationError)>,
+    ) -> Self {
+        let msg = errors
+            .iter()
+            .map(|(field, err)| format!("{field}: {err}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        MarkdownError::InvalidOptionsError(msg)
     }
 }
 
