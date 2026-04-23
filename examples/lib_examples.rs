@@ -39,6 +39,7 @@ pub fn example_basic_markdown_conversion(
 
     let mut comrak_options = Options::default();
     comrak_options.extension.strikethrough = true; // Enable strikethrough
+    comrak_options.extension.table = true; // Required when enhanced_tables is true
 
     let options =
         MarkdownOptions::default().with_comrak_options(comrak_options);
