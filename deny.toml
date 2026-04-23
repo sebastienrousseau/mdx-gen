@@ -1,34 +1,71 @@
-[licenses]
-# List of allowed licenses for dependencies
-allow = [
-    "MIT",
-    "Apache-2.0",
-    "Unicode-DFS-2016",
-    "Unicode-3.0",
-    "ISC",
-    "BSD-2-Clause",
-    "BSD-3-Clause",
-]
+# cargo-deny configuration for mdx-gen.
+#
+# Run: `cargo deny check`
+#
+# Sections:
+#   [graph]      — which dep graph to check (all features, all targets).
+#   [advisories] — vulnerability + yanked-crate enforcement.
+#   [licenses]   — allow-listed license identifiers (SPDX).
+#   [bans]       — banned crates + duplicate-version enforcement.
+#   [sources]    — allow-listed registry / git sources.
 
-[bans]
-# Lint level for when multiple versions of the same crate are detected
-multiple-versions = "warn"
-
-# The graph highlighting used when creating dotgraphs for crates with multiple versions
-# Options: "lowest-version", "simplest-path", "all"
-highlight = "all"
-
-# Certain crates/versions that will be skipped when doing duplicate detection.
-skip = []
-
-# Similarly to `skip` allows you to skip certain crates during duplicate detection, unlike skip, it also includes the entire tree of transitive dependencies starting at the specified crate, up to a certain depth, which is by default infinite
-skip-tree = []
+[graph]
+all-features = true
 
 [advisories]
-# Acknowledged advisories for transitive dependencies we cannot control.
+version = 2
+# Fail the build if any transitive dep was yanked from crates.io.
+yanked = "deny"
+# Acknowledged advisories with a short rationale per entry. Keep
+# this list short and revisit on every cargo-deny update.
 ignore = [
-    # bincode 1.3.3 — unmaintained (not unsound). Transitive dep of
-    # syntect via dump-load for pre-compiled syntax/theme packs.
+    # bincode 1.3.3 — flagged unmaintained (RUSTSEC-2025-0141), not
+    # unsound. Pulled in transitively by syntect's dump-load path
+    # for pre-compiled syntax/theme packs. No upgrade available
+    # until syntect ships against bincode 2.x.
     "RUSTSEC-2025-0141",
-
 ]
+
+[licenses]
+version = 2
+# SPDX identifiers we accept across the whole dep tree. Keep this
+# tight; expand only with a short rationale recorded in the commit
+# message.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+]
+confidence-threshold = 0.95
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+# Crates we never want pulled in, even transitively.
+deny = [
+    # OpenSSL family — the dep tree should stay pure-Rust (rustls
+    # / ring) for portability and supply-chain reasons.
+    { name = "openssl-sys" },
+    { name = "openssl" },
+]
+# Some transitive duplicate versions are unavoidable until upstream
+# converges. List with a short reason if you skip any.
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![deny(missing_docs)]
 // src/lib.rs
 #![doc = include_str!("../README.md")]
 #![doc(

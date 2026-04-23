@@ -60,7 +60,7 @@ comrak = { version = "0.52", default-features = false }
 html-escape = "0.2"
 log = "0.4"
 regex = "1.12"
-yaml_safe = { path = "crates/yaml_safe", optional = true }
+yaml_safe = { path = "crates/yaml_safe", version = "0.1", optional = true }
 syntect = { version = "5.2", optional = true, default-features = false, features = ["default-themes", "default-syntaxes", "html", "regex-fancy"] }
 thiserror = "2.0"
 
