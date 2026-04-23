@@ -45,6 +45,10 @@ pub enum MarkdownError {
     /// An error occurred while parsing YAML frontmatter.
     #[error("Frontmatter error: {0}")]
     FrontmatterError(String),
+
+    /// An error occurred while writing output to a `Write` sink.
+    #[error("Output write error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 #[cfg(test)]

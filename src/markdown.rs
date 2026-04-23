@@ -22,8 +22,9 @@ use crate::extensions::{
 use comrak::options::{Plugins, RenderPlugins};
 use comrak::{Arena, Options};
 use log::{debug, info, warn};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::io::Write;
 use std::sync::LazyLock;
 
 #[cfg(feature = "syntax_highlighting")]
@@ -62,6 +63,13 @@ pub struct MarkdownOptions<'a> {
     /// Use `Some("")` for bare `id="slug"` without a prefix.
     /// `None` disables header IDs (default).
     pub header_ids: Option<String>,
+    /// Optional extensions to the default HTML sanitizer allow-list.
+    ///
+    /// When `None`, the cached default sanitizer is used — the hot
+    /// path. When `Some`, a fresh `ammonia::Builder` is constructed
+    /// per call that merges the defaults with the extras declared in
+    /// [`SanitizerConfig`].
+    pub sanitizer_config: Option<SanitizerConfig>,
 }
 
 impl<'a> Default for MarkdownOptions<'a> {
@@ -76,6 +84,7 @@ impl<'a> Default for MarkdownOptions<'a> {
             custom_block_config: CustomBlockConfig::default(),
             max_input_size: DEFAULT_MAX_INPUT_SIZE,
             header_ids: None,
+            sanitizer_config: None,
         }
     }
 }
@@ -155,6 +164,20 @@ impl<'a> MarkdownOptions<'a> {
         self
     }
 
+    /// Extends the HTML sanitizer allow-list.
+    ///
+    /// Setting this disables the cached default sanitizer for calls
+    /// made with these options — a fresh `ammonia::Builder` is
+    /// constructed per call that merges the defaults with the extras.
+    /// Only used when `allow_unsafe_html` is `false`.
+    pub fn with_sanitizer_config(
+        mut self,
+        config: SanitizerConfig,
+    ) -> Self {
+        self.sanitizer_config = Some(config);
+        self
+    }
+
     /// Validates that options are consistent.
     pub fn validate(&self) -> Result<(), String> {
         if self.enable_enhanced_tables
@@ -186,7 +209,75 @@ impl fmt::Debug for MarkdownOptions<'_> {
             .field("allow_unsafe_html", &self.allow_unsafe_html)
             .field("max_input_size", &self.max_input_size)
             .field("header_ids", &self.header_ids)
+            .field("sanitizer_config", &self.sanitizer_config)
             .finish()
+    }
+}
+
+// ── Sanitizer configuration ─────────────────────────────────────────
+
+/// User-supplied extensions to the default HTML sanitizer allow-list.
+///
+/// Each field is additive: values here are merged on top of the
+/// defaults that ship with `mdx-gen`. Wire an instance into
+/// [`MarkdownOptions::with_sanitizer_config`].
+#[derive(Debug, Clone, Default)]
+pub struct SanitizerConfig {
+    /// Additional tags to allow (beyond the defaults).
+    pub extra_tags: Vec<String>,
+    /// Additional attributes per tag, in the form `tag -> attrs`.
+    pub extra_tag_attributes: HashMap<String, Vec<String>>,
+    /// Additional generic attributes that may appear on any tag.
+    pub extra_generic_attributes: Vec<String>,
+    /// Additional allowed class values per tag.
+    pub extra_allowed_classes: HashMap<String, Vec<String>>,
+}
+
+impl SanitizerConfig {
+    /// Creates a new, empty config (equivalent to `Default`).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds one extra tag to the allow-list.
+    pub fn with_tag(mut self, tag: impl Into<String>) -> Self {
+        self.extra_tags.push(tag.into());
+        self
+    }
+
+    /// Adds one extra attribute for a specific tag.
+    pub fn with_tag_attribute(
+        mut self,
+        tag: impl Into<String>,
+        attr: impl Into<String>,
+    ) -> Self {
+        self.extra_tag_attributes
+            .entry(tag.into())
+            .or_default()
+            .push(attr.into());
+        self
+    }
+
+    /// Adds one extra generic attribute (applies to any allowed tag).
+    pub fn with_generic_attribute(
+        mut self,
+        attr: impl Into<String>,
+    ) -> Self {
+        self.extra_generic_attributes.push(attr.into());
+        self
+    }
+
+    /// Adds one extra allowed class value for a specific tag.
+    pub fn with_allowed_class(
+        mut self,
+        tag: impl Into<String>,
+        class: impl Into<String>,
+    ) -> Self {
+        self.extra_allowed_classes
+            .entry(tag.into())
+            .or_default()
+            .push(class.into());
+        self
     }
 }
 
@@ -219,6 +310,35 @@ pub fn process_markdown(
     content: &str,
     options: &MarkdownOptions,
 ) -> Result<String, MarkdownError> {
+    let mut buf: Vec<u8> = Vec::new();
+    process_markdown_to_writer(content, &mut buf, options)?;
+    // comrak and ammonia both emit valid UTF-8, so this should never
+    // fail in practice — but surface the error rather than panic.
+    String::from_utf8(buf).map_err(|e| {
+        MarkdownError::RenderError(format!(
+            "non-UTF-8 output from pipeline: {e}"
+        ))
+    })
+}
+
+/// Streams processed HTML directly to a `Write` sink.
+///
+/// Semantically equivalent to [`process_markdown`], but avoids one
+/// intermediate allocation when callers already have a `Write`
+/// destination (a file, a buffered network writer, a template engine).
+/// The comrak render stage still produces a `String` internally — the
+/// 1 MiB default input cap means end-to-end streaming would add API
+/// surface without meaningful memory savings.
+///
+/// # Errors
+///
+/// Returns [`MarkdownError::IoError`] if the writer fails. All other
+/// error conditions mirror [`process_markdown`].
+pub fn process_markdown_to_writer<W: Write>(
+    content: &str,
+    writer: &mut W,
+    options: &MarkdownOptions,
+) -> Result<(), MarkdownError> {
     info!("Starting markdown processing");
     debug!("Markdown options: {:?}", options);
 
@@ -292,14 +412,20 @@ pub fn process_markdown(
     )
     .map_err(|e| MarkdownError::RenderError(e.to_string()))?;
 
-    // ── 7. Sanitize ─────────────────────────────────────────────
-    if !options.allow_unsafe_html {
+    // ── 6. Sanitize and emit ────────────────────────────────────
+    if options.allow_unsafe_html {
+        writer.write_all(html.as_bytes())?;
+    } else {
         debug!("Sanitizing HTML output");
-        html = sanitize_html(&html);
+        sanitize_html_to_writer(
+            &html,
+            writer,
+            options.sanitizer_config.as_ref(),
+        )?;
     }
 
     info!("Markdown processing completed successfully");
-    Ok(html)
+    Ok(())
 }
 
 // ── HTML sanitization ───────────────────────────────────────────────
@@ -340,77 +466,126 @@ static CODE_LANG_CLASSES: LazyLock<HashSet<String>> =
         .collect()
     });
 
+/// Applies the default sanitizer allow-list to a `Builder<'a>`.
+///
+/// Kept separate so the cached default builder and any per-call
+/// builder (used when the caller supplies a [`SanitizerConfig`])
+/// share one source of truth for the base policy. All strings
+/// threaded through here are `'static`, which coerces into any `'a`.
+fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
+    let code_class_refs: HashSet<&'static str> =
+        CODE_LANG_CLASSES.iter().map(|s| s.as_str()).collect();
+
+    let mut allowed_classes: HashMap<
+        &'static str,
+        HashSet<&'static str>,
+    > = HashMap::new();
+
+    allowed_classes.insert(
+        "div",
+        [
+            "alert",
+            "alert-info",
+            "alert-warning",
+            "alert-success",
+            "alert-primary",
+            "alert-danger",
+            "alert-secondary",
+            "table-responsive",
+        ]
+        .into_iter()
+        .collect(),
+    );
+    allowed_classes.insert("table", ["table"].into_iter().collect());
+    allowed_classes.insert(
+        "td",
+        ["text-left", "text-center", "text-right"]
+            .into_iter()
+            .collect(),
+    );
+    allowed_classes.insert("code", code_class_refs);
+
+    builder
+        .add_tags(["div", "pre", "code", "span", "input"])
+        .add_tag_attributes("div", &["role", "id"])
+        .add_tag_attributes("td", &["align"])
+        .add_tag_attributes("th", &["align"])
+        .add_tag_attributes("input", &["type", "checked", "disabled"])
+        .add_tag_attributes("h1", &["id"])
+        .add_tag_attributes("h2", &["id"])
+        .add_tag_attributes("h3", &["id"])
+        .add_tag_attributes("h4", &["id"])
+        .add_tag_attributes("h5", &["id"])
+        .add_tag_attributes("h6", &["id"])
+        .add_tag_attributes("a", &["id"])
+        .add_generic_attributes(["style"])
+        .allowed_classes(allowed_classes);
+}
+
 /// Pre-configured ammonia sanitizer, built once and reused across
-/// every call to [`sanitize_html`].
+/// every default-config call to the sanitizer.
 ///
 /// Why: `ammonia::Builder` is relatively expensive to construct — it
 /// allocates several tag/attribute hash sets and the allowed-classes
-/// map. Since the configuration is static (all `'static` strs), we
-/// build a single `Builder<'static>` behind a `LazyLock` and call
-/// `clean(&self, …)` on it repeatedly.
+/// map. Since the default configuration is static (all `'static`
+/// strs), we build a single `Builder<'static>` behind a `LazyLock`
+/// and call `clean(&self, …)` on it repeatedly.
 static SANITIZE_BUILDER: LazyLock<ammonia::Builder<'static>> =
     LazyLock::new(|| {
-        use std::collections::HashMap;
-
-        let code_class_refs: HashSet<&'static str> =
-            CODE_LANG_CLASSES.iter().map(|s| s.as_str()).collect();
-
-        let mut allowed_classes: HashMap<
-            &'static str,
-            HashSet<&'static str>,
-        > = HashMap::new();
-
-        allowed_classes.insert(
-            "div",
-            [
-                "alert",
-                "alert-info",
-                "alert-warning",
-                "alert-success",
-                "alert-primary",
-                "alert-danger",
-                "alert-secondary",
-                "table-responsive",
-            ]
-            .into_iter()
-            .collect(),
-        );
-        allowed_classes
-            .insert("table", ["table"].into_iter().collect());
-        allowed_classes.insert(
-            "td",
-            ["text-left", "text-center", "text-right"]
-                .into_iter()
-                .collect(),
-        );
-        allowed_classes.insert("code", code_class_refs);
-
         let mut builder = ammonia::Builder::default();
-        builder
-            .add_tags(["div", "pre", "code", "span", "input"])
-            .add_tag_attributes("div", &["role", "id"])
-            .add_tag_attributes("td", &["align"])
-            .add_tag_attributes("th", &["align"])
-            .add_tag_attributes(
-                "input",
-                &["type", "checked", "disabled"],
-            )
-            .add_tag_attributes("h1", &["id"])
-            .add_tag_attributes("h2", &["id"])
-            .add_tag_attributes("h3", &["id"])
-            .add_tag_attributes("h4", &["id"])
-            .add_tag_attributes("h5", &["id"])
-            .add_tag_attributes("h6", &["id"])
-            .add_tag_attributes("a", &["id"])
-            .add_generic_attributes(["style"])
-            .allowed_classes(allowed_classes);
+        configure_default_sanitizer(&mut builder);
         builder
     });
 
-/// Sanitizes HTML output, stripping dangerous tags while preserving
-/// safe structural markup that this library generates.
-fn sanitize_html(html: &str) -> String {
-    SANITIZE_BUILDER.clean(html).to_string()
+/// Writes sanitized HTML to the given writer.
+///
+/// Uses the cached default sanitizer when `cfg` is `None` (hot path).
+/// When `cfg` is `Some`, builds a fresh `Builder` that merges the
+/// defaults with the caller's extras — per-call cost, but scoped to
+/// the uncommon case.
+fn sanitize_html_to_writer<W: Write>(
+    html: &str,
+    writer: &mut W,
+    cfg: Option<&SanitizerConfig>,
+) -> std::io::Result<()> {
+    match cfg {
+        None => SANITIZE_BUILDER.clean(html).write_to(writer),
+        Some(custom) => {
+            build_custom_sanitizer(custom).clean(html).write_to(writer)
+        }
+    }
+}
+
+/// Builds a one-shot sanitizer that layers `cfg`'s extras over the
+/// default allow-list. Lifetime is tied to `cfg` since the extras
+/// are `String`-owned on the caller side.
+fn build_custom_sanitizer(
+    cfg: &SanitizerConfig,
+) -> ammonia::Builder<'_> {
+    let mut builder = ammonia::Builder::default();
+    configure_default_sanitizer(&mut builder);
+
+    if !cfg.extra_tags.is_empty() {
+        builder.add_tags(cfg.extra_tags.iter().map(String::as_str));
+    }
+    for (tag, attrs) in &cfg.extra_tag_attributes {
+        builder.add_tag_attributes(
+            tag.as_str(),
+            attrs.iter().map(String::as_str),
+        );
+    }
+    if !cfg.extra_generic_attributes.is_empty() {
+        builder.add_generic_attributes(
+            cfg.extra_generic_attributes.iter().map(String::as_str),
+        );
+    }
+    for (tag, classes) in &cfg.extra_allowed_classes {
+        builder.add_allowed_classes(
+            tag.as_str(),
+            classes.iter().map(String::as_str),
+        );
+    }
+    builder
 }
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -716,5 +891,145 @@ fn main() {
             html.contains("text-right"),
             "Right-aligned cells should have class"
         );
+    }
+
+    // ── Streaming API ───────────────────────────────────────────
+
+    #[test]
+    fn test_process_markdown_to_writer_matches_string_variant() {
+        let markdown = "# Title\n\nParagraph with *emphasis*.";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_syntax_highlighting(false);
+
+        let as_string = process_markdown(markdown, &options).unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        process_markdown_to_writer(markdown, &mut buf, &options)
+            .unwrap();
+        let as_bytes = String::from_utf8(buf).unwrap();
+
+        assert_eq!(
+            as_string, as_bytes,
+            "writer variant must produce byte-identical output"
+        );
+    }
+
+    #[test]
+    fn test_process_markdown_to_writer_sanitizes() {
+        let markdown = "<script>alert('xss')</script>\n\n# Safe";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false);
+
+        let mut buf: Vec<u8> = Vec::new();
+        process_markdown_to_writer(markdown, &mut buf, &options)
+            .unwrap();
+        let html = String::from_utf8(buf).unwrap();
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("<h1>Safe</h1>"));
+    }
+
+    #[test]
+    fn test_process_markdown_to_writer_propagates_io_error() {
+        struct AlwaysFails;
+        impl Write for AlwaysFails {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "nope",
+                ))
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false);
+        let err = process_markdown_to_writer(
+            "# hi",
+            &mut AlwaysFails,
+            &options,
+        )
+        .unwrap_err();
+        assert!(matches!(err, MarkdownError::IoError(_)));
+    }
+
+    // ── SanitizerConfig ─────────────────────────────────────────
+
+    #[test]
+    fn test_sanitizer_config_allows_extra_tag() {
+        // <main> is not in ammonia's default tag allow-list and is
+        // not added by our defaults, so it's stripped to text unless
+        // the SanitizerConfig extends the list.
+        let markdown = "<main>wrapper</main>";
+
+        let strict = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false);
+        let stripped = process_markdown(markdown, &strict).unwrap();
+        assert!(
+            !stripped.contains("<main>"),
+            "default sanitizer drops <main>: {stripped}"
+        );
+
+        let extended = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new().with_tag("main"),
+            );
+        let kept = process_markdown(markdown, &extended).unwrap();
+        assert!(
+            kept.contains("<main>wrapper</main>"),
+            "extended sanitizer keeps <main>: {kept}"
+        );
+    }
+
+    #[test]
+    fn test_sanitizer_config_adds_allowed_class() {
+        let markdown =
+            "<span class=\"badge\">new</span> <span class=\"danger\">x</span>";
+
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false)
+            .with_sanitizer_config(
+                SanitizerConfig::new()
+                    .with_allowed_class("span", "badge"),
+            );
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            html.contains("class=\"badge\""),
+            "whitelisted class survives: {html}"
+        );
+        assert!(
+            !html.contains("class=\"danger\""),
+            "non-whitelisted class dropped: {html}"
+        );
+    }
+
+    #[test]
+    fn test_sanitizer_config_default_path_unchanged() {
+        // Options with no sanitizer_config must go through the cached
+        // default builder and produce the same output as before the
+        // feature was added.
+        let markdown = "<script>x</script>\n<div class=\"alert alert-info\">safe</div>";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(false);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("alert alert-info"));
     }
 }

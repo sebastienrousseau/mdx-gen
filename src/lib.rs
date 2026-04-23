@@ -68,7 +68,15 @@ pub use extensions::CustomBlockType;
 /// the size limit, or rendering fails.
 pub use markdown::process_markdown;
 
+/// Streams processed HTML directly to a `Write` sink.
+///
+/// See [`process_markdown`] for the pipeline semantics; this variant
+/// writes the output through a caller-provided writer instead of
+/// allocating a `String`.
+pub use markdown::process_markdown_to_writer;
+
 pub use markdown::MarkdownOptions;
+pub use markdown::SanitizerConfig;
 
 /// Re-export comrak's options for convenience.
 ///
