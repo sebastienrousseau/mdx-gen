@@ -11,14 +11,19 @@ use crate::error::MarkdownError;
 /// Looks for content between `---` delimiters at the start of the
 /// document. Returns `(frontmatter_yaml, remaining_markdown)`.
 /// If no frontmatter is found, returns `(None, original_content)`.
+///
+/// The opening `---` must appear at byte 0 — leading whitespace
+/// disables frontmatter detection. This matches Jekyll, Hugo, and
+/// other CommonMark front-matter consumers; permitting leading
+/// whitespace would silently re-interpret a normal `---` setext
+/// underline (or thematic break) as frontmatter.
 pub fn extract_frontmatter(content: &str) -> (Option<&str>, &str) {
-    let trimmed = content.trim_start();
-    if !trimmed.starts_with("---") {
+    if !content.starts_with("---") {
         return (None, content);
     }
 
     // Skip the opening "---" and any trailing whitespace on that line
-    let after_open = &trimmed[3..];
+    let after_open = &content[3..];
     let after_open = after_open
         .strip_prefix('\n')
         .or_else(|| after_open.strip_prefix("\r\n"))
@@ -98,6 +103,26 @@ mod tests {
         let (fm, rest) = extract_frontmatter(input);
         assert_eq!(fm, Some(""));
         assert_eq!(rest, "# Content");
+    }
+
+    #[test]
+    fn test_leading_whitespace_disables_frontmatter() {
+        // Strict mode: even one leading space means no frontmatter.
+        // Returns the original content unchanged so the caller sees
+        // exactly what they passed in.
+        for input in [
+            " ---\ntitle: Hello\n---\n# Content",
+            "\n---\ntitle: Hello\n---\n# Content",
+            "\t---\ntitle: Hello\n---\n# Content",
+            "  \n---\ntitle: Hello\n---\n# Content",
+        ] {
+            let (fm, rest) = extract_frontmatter(input);
+            assert!(
+                fm.is_none(),
+                "leading whitespace must disable frontmatter for: {input:?}"
+            );
+            assert_eq!(rest, input);
+        }
     }
 
     #[cfg(feature = "yaml_support")]
