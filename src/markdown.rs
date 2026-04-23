@@ -421,7 +421,7 @@ fn pipeline<W: Write>(
 
     // Wire header_ids into comrak's extension
     if let Some(ref prefix) = options.header_ids {
-        comrak_opts.extension.header_ids = Some(prefix.clone());
+        comrak_opts.extension.header_id_prefix = Some(prefix.clone());
     }
 
     // ── 3. Parse → AST ─────────────────────────────────────────

@@ -5,10 +5,10 @@
 
 use comrak::Options;
 use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion,
-    Throughput,
+    criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
 use mdx_gen::{process_markdown, MarkdownOptions};
+use std::hint::black_box;
 
 /// Create a valid MarkdownOptions configuration
 fn create_valid_options(
