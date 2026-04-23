@@ -340,58 +340,77 @@ static CODE_LANG_CLASSES: LazyLock<HashSet<String>> =
         .collect()
     });
 
+/// Pre-configured ammonia sanitizer, built once and reused across
+/// every call to [`sanitize_html`].
+///
+/// Why: `ammonia::Builder` is relatively expensive to construct — it
+/// allocates several tag/attribute hash sets and the allowed-classes
+/// map. Since the configuration is static (all `'static` strs), we
+/// build a single `Builder<'static>` behind a `LazyLock` and call
+/// `clean(&self, …)` on it repeatedly.
+static SANITIZE_BUILDER: LazyLock<ammonia::Builder<'static>> =
+    LazyLock::new(|| {
+        use std::collections::HashMap;
+
+        let code_class_refs: HashSet<&'static str> =
+            CODE_LANG_CLASSES.iter().map(|s| s.as_str()).collect();
+
+        let mut allowed_classes: HashMap<
+            &'static str,
+            HashSet<&'static str>,
+        > = HashMap::new();
+
+        allowed_classes.insert(
+            "div",
+            [
+                "alert",
+                "alert-info",
+                "alert-warning",
+                "alert-success",
+                "alert-primary",
+                "alert-danger",
+                "alert-secondary",
+                "table-responsive",
+            ]
+            .into_iter()
+            .collect(),
+        );
+        allowed_classes
+            .insert("table", ["table"].into_iter().collect());
+        allowed_classes.insert(
+            "td",
+            ["text-left", "text-center", "text-right"]
+                .into_iter()
+                .collect(),
+        );
+        allowed_classes.insert("code", code_class_refs);
+
+        let mut builder = ammonia::Builder::default();
+        builder
+            .add_tags(["div", "pre", "code", "span", "input"])
+            .add_tag_attributes("div", &["role", "id"])
+            .add_tag_attributes("td", &["align"])
+            .add_tag_attributes("th", &["align"])
+            .add_tag_attributes(
+                "input",
+                &["type", "checked", "disabled"],
+            )
+            .add_tag_attributes("h1", &["id"])
+            .add_tag_attributes("h2", &["id"])
+            .add_tag_attributes("h3", &["id"])
+            .add_tag_attributes("h4", &["id"])
+            .add_tag_attributes("h5", &["id"])
+            .add_tag_attributes("h6", &["id"])
+            .add_tag_attributes("a", &["id"])
+            .add_generic_attributes(["style"])
+            .allowed_classes(allowed_classes);
+        builder
+    });
+
 /// Sanitizes HTML output, stripping dangerous tags while preserving
 /// safe structural markup that this library generates.
 fn sanitize_html(html: &str) -> String {
-    use std::collections::HashMap;
-
-    let code_class_refs: HashSet<&str> =
-        CODE_LANG_CLASSES.iter().map(|s| s.as_str()).collect();
-
-    let mut allowed_classes: HashMap<&str, HashSet<&str>> =
-        HashMap::new();
-
-    allowed_classes.insert(
-        "div",
-        [
-            "alert",
-            "alert-info",
-            "alert-warning",
-            "alert-success",
-            "alert-primary",
-            "alert-danger",
-            "alert-secondary",
-            "table-responsive",
-        ]
-        .into_iter()
-        .collect(),
-    );
-    allowed_classes.insert("table", ["table"].into_iter().collect());
-    allowed_classes.insert(
-        "td",
-        ["text-left", "text-center", "text-right"]
-            .into_iter()
-            .collect(),
-    );
-    allowed_classes.insert("code", code_class_refs);
-
-    ammonia::Builder::default()
-        .add_tags(["div", "pre", "code", "span", "input"])
-        .add_tag_attributes("div", &["role", "id"])
-        .add_tag_attributes("td", &["align"])
-        .add_tag_attributes("th", &["align"])
-        .add_tag_attributes("input", &["type", "checked", "disabled"])
-        .add_tag_attributes("h1", &["id"])
-        .add_tag_attributes("h2", &["id"])
-        .add_tag_attributes("h3", &["id"])
-        .add_tag_attributes("h4", &["id"])
-        .add_tag_attributes("h5", &["id"])
-        .add_tag_attributes("h6", &["id"])
-        .add_tag_attributes("a", &["id"])
-        .add_generic_attributes(["style"])
-        .allowed_classes(allowed_classes)
-        .clean(html)
-        .to_string()
+    SANITIZE_BUILDER.clean(html).to_string()
 }
 
 // ── Tests ───────────────────────────────────────────────────────────

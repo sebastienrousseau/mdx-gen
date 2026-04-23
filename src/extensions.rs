@@ -13,11 +13,12 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 
 // ── Table regexes (cached, for legacy process_tables) ───────────────
+//
+// Opening and closing `<table>` tags are literal substrings, handled
+// by `str::replace` in `process_tables` below — no regex needed. The
+// `<td …>` rewrite does need a pattern to capture the attribute run,
+// so it stays as a cached `Regex`.
 
-static TABLE_OPEN_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"<table>").unwrap());
-static TABLE_CLOSE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"</table>").unwrap());
 static TABLE_CELL_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"<td([^>]*)>").unwrap());
 
@@ -293,17 +294,14 @@ pub fn process_custom_blocks(content: &str) -> String {
 
 /// Processes tables, enhancing them with responsive design and alignment classes.
 pub fn process_tables(table_html: &str) -> String {
-    let table_html = TABLE_OPEN_RE.replace_all(
-        table_html,
+    let table_html = table_html.replace(
+        "<table>",
         r#"<div class="table-responsive"><table class="table">"#,
     );
+    let table_html = table_html.replace("</table>", "</table></div>");
 
-    let table_html =
-        TABLE_CLOSE_RE.replace_all(&table_html, "</table></div>");
-
-    let table_html = TABLE_CELL_RE.replace_all(
-        &table_html,
-        |caps: &regex::Captures| {
+    TABLE_CELL_RE
+        .replace_all(&table_html, |caps: &regex::Captures| {
             let attrs = &caps[1];
             if attrs.contains("align=\"center\"") {
                 format!(r#"<td{attrs} class="text-center">"#)
@@ -312,10 +310,8 @@ pub fn process_tables(table_html: &str) -> String {
             } else {
                 format!(r#"<td{attrs} class="text-left">"#)
             }
-        },
-    );
-
-    table_html.to_string()
+        })
+        .to_string()
 }
 
 #[cfg(test)]
