@@ -80,22 +80,22 @@ pub fn collect_all_text<'a>(root: comrak::nodes::Node<'a>) -> String {
                 }
                 buf.push_str(&cb.literal);
             }
-            NodeValue::SoftBreak | NodeValue::LineBreak => {
-                if !buf.is_empty() && !buf.ends_with(' ') {
-                    buf.push(' ');
-                }
+            NodeValue::SoftBreak | NodeValue::LineBreak
+                if !buf.is_empty() && !buf.ends_with(' ') =>
+            {
+                buf.push(' ');
             }
-            // Ensure space between structural elements
+            // Ensure space between structural elements.
             NodeValue::Paragraph
             | NodeValue::Heading(_)
             | NodeValue::Item(_)
             | NodeValue::BlockQuote
             | NodeValue::Table(_)
             | NodeValue::TableRow(_)
-            | NodeValue::TableCell => {
-                if !buf.is_empty() && !buf.ends_with(' ') {
-                    buf.push(' ');
-                }
+            | NodeValue::TableCell
+                if !buf.is_empty() && !buf.ends_with(' ') =>
+            {
+                buf.push(' ');
             }
             _ => {}
         }
