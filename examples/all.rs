@@ -19,11 +19,14 @@ const EXAMPLES: &[&str] = &[
     "alerts",
     "cms",
     "security",
+    "site",
     // Output channels
     "styling",
+    "gallery",
     "streaming",
     "pipe",
-    // Performance + integrators
+    // Integrators
+    "search",
     "bulk",
     "errors",
 ];

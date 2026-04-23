@@ -153,12 +153,25 @@ name = "styling"
 path = "examples/styling.rs"
 
 [[example]]
+name = "gallery"
+path = "examples/gallery.rs"
+
+[[example]]
 name = "streaming"
 path = "examples/streaming.rs"
 
 [[example]]
 name = "pipe"
 path = "examples/pipe.rs"
+
+[[example]]
+name = "search"
+path = "examples/search.rs"
+
+[[example]]
+name = "site"
+path = "examples/site.rs"
+required-features = ["yaml_support"]
 
 [[example]]
 name = "bulk"
