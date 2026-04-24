@@ -27,5 +27,11 @@ jobs:
     uses: sebastienrousseau/pipelines/.github/workflows/docs.yml@main
     with:
       type: rust
-      redirect-crate: mdx-gen
+      # rustdoc output directory is the crate name with hyphens
+      # converted to underscores (`mdx-gen` → `mdx_gen`). The
+      # upstream docs workflow uses this input verbatim as the URL
+      # the root index.html redirects to, so it must be the
+      # underscore form; otherwise `https://doc.mdxgen.com/` bounces
+      # to a 404 at `/mdx-gen/`.
+      redirect-crate: mdx_gen
       cname: doc.mdxgen.com
