@@ -18,6 +18,15 @@ permissions: {}
 
 jobs:
   release:
+    # Grant only the permissions the reusable workflow's jobs declare:
+    # `contents: write` (create GitHub release), `id-token: write`
+    # (OIDC for Trusted Publishing / crates.io), `attestations: write`
+    # (SLSA build provenance). Top-level `permissions: {}` keeps every
+    # other future job locked down by default.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     uses: sebastienrousseau/pipelines/.github/workflows/release.yml@main
     with:
       language: rust
