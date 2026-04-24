@@ -38,49 +38,46 @@
 //! commons = { version = "0.0.2", default-features = false, features = ["error", "time"] }
 //! ```
 
-#![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![warn(clippy::all)]
 
+// NOTE: The vendored `commons` crate is `publish = false` inside this
+// workspace and never published to docs.rs, so the upstream's
+// `#![cfg_attr(docsrs, feature(doc_cfg))]` + per-module
+// `#[cfg_attr(docsrs, doc(cfg(feature = "…")))]` attributes were
+// stripped. They require the nightly `doc_cfg` feature, which trips
+// the repo-wide `rust-toolchain.toml` stable pin when the shared docs
+// workflow runs `cargo doc` with `RUSTDOCFLAGS="--cfg docsrs"`.
+
 #[cfg(feature = "config")]
-#[cfg_attr(docsrs, doc(cfg(feature = "config")))]
 pub mod config;
 
 #[cfg(feature = "error")]
-#[cfg_attr(docsrs, doc(cfg(feature = "error")))]
 pub mod error;
 
 #[cfg(feature = "logging")]
-#[cfg_attr(docsrs, doc(cfg(feature = "logging")))]
 pub mod logging;
 
 #[cfg(feature = "time")]
-#[cfg_attr(docsrs, doc(cfg(feature = "time")))]
 pub mod time;
 
 #[cfg(feature = "collections")]
-#[cfg_attr(docsrs, doc(cfg(feature = "collections")))]
 pub mod collections;
 
 #[cfg(feature = "validation")]
-#[cfg_attr(docsrs, doc(cfg(feature = "validation")))]
 pub mod validation;
 
 #[cfg(feature = "retry")]
-#[cfg_attr(docsrs, doc(cfg(feature = "retry")))]
 pub mod retry;
 
 #[cfg(feature = "id")]
-#[cfg_attr(docsrs, doc(cfg(feature = "id")))]
 pub mod id;
 
 #[cfg(feature = "env")]
-#[cfg_attr(docsrs, doc(cfg(feature = "env")))]
 pub mod env;
 
 #[cfg(feature = "fs")]
-#[cfg_attr(docsrs, doc(cfg(feature = "fs")))]
 pub mod fs;
 
 /// Prelude module for convenient imports.
