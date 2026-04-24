@@ -86,14 +86,4 @@ mod tests {
             "HTML rendering error: fmt failed"
         );
     }
-
-    #[test]
-    fn test_markdown_error_frontmatter_error() {
-        let error =
-            MarkdownError::FrontmatterError("invalid yaml".to_string());
-        assert_eq!(
-            format!("{error}"),
-            "Frontmatter error: invalid yaml"
-        );
-    }
 }

@@ -23,8 +23,8 @@ pub mod diagrams;
 #[cfg(feature = "syntax_highlighting")]
 pub mod highlight;
 
-/// YAML frontmatter extraction and parsing.
-pub mod frontmatter;
+/// Validation primitives used by [`MarkdownOptions::validate`].
+pub mod validation;
 
 /// The `markdown` module contains the core processing pipeline.
 pub mod markdown;
@@ -54,6 +54,16 @@ pub use extensions::ColumnAlignment;
 pub use extensions::CustomBlockConfig;
 pub use extensions::CustomBlockType;
 pub use extensions::Heading;
+
+/// Structured validation error surfaced by
+/// [`MarkdownOptions::validate`]. The pipeline folds failing checks
+/// into [`MarkdownError::InvalidOptionsError`]; callers can inspect
+/// the structured form directly before running the pipeline.
+pub use validation::ValidationError;
+
+/// Builder that composes multiple validation checks into a single
+/// pass — used internally by [`MarkdownOptions::validate`].
+pub use validation::Validator;
 
 /// Script block that hydrates client-side `<pre class="mermaid">`
 /// containers into inline SVG. Embed once per page — typically

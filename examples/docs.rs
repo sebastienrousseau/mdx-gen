@@ -29,7 +29,7 @@ Add the crate:
 
 ```toml
 [dependencies]
-mdx-gen = "0.0.3"
+mdx-gen = "0.0.4"
 ```
 
 <div class="note">The default feature set covers most needs.</div>

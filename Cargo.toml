@@ -4,15 +4,18 @@
 # -----------------------------------------------------------------------------
 
 [workspace]
-members = [".", "crates/commons", "crates/yaml_safe"]
-# The fuzz/ crate has its own [workspace] table and pulls in
-# libfuzzer-sys, which we don't want in the main build graph.
-exclude = ["fuzz"]
+members = ["."]
+# `crates/commons` and `crates/yaml_safe` are parked on disk as
+# reference material for the upcoming EUXIS replacements; they are
+# deliberately NOT workspace members so `cargo publish` sees a clean
+# single-crate graph. The fuzz/ crate has its own [workspace] table
+# and pulls in libfuzzer-sys, which we don't want in the main build.
+exclude = ["fuzz", "crates/commons", "crates/yaml_safe"]
 resolver = "2"
 
 [package]
 name = "mdx-gen"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 rust-version = "1.88.0"
 license = "MIT OR Apache-2.0"
@@ -56,17 +59,10 @@ autoexamples = false
 
 [dependencies]
 ammonia = "4.1"
-# Shared EUXIS-ecosystem utilities. Vendored at crates/commons (see
-# that crate's Cargo.toml for the upstream pointer). The `error` and
-# `validation` features give mdx-gen idiomatic hooks for cross-crate
-# error interop and the shared ValidationError type used by
-# MarkdownOptions::validate.
-commons = { package = "euxis-commons", path = "crates/commons", version = "0.0.3", default-features = false, features = ["error", "validation"] }
 comrak = { version = "0.52", default-features = false }
 html-escape = "0.2"
 log = "0.4"
 regex = "1.12"
-yaml_safe = { path = "crates/yaml_safe", version = "0.1", optional = true }
 syntect = { version = "5.2", optional = true, default-features = false, features = ["default-themes", "default-syntaxes", "html", "regex-fancy"] }
 thiserror = "2.0"
 
@@ -82,16 +78,13 @@ path = "src/lib.rs"
 # -----------------------------------------------------------------------------
 
 [features]
-# Default feature set: syntax highlighting + YAML frontmatter. Users
-# who want a minimal build can opt out with `--no-default-features`
-# and then enable just the features they need.
-default = ["syntax_highlighting", "yaml_support"]
+# Default feature set: syntax highlighting. Users who want a minimal
+# build can opt out with `--no-default-features` and then enable just
+# the features they need.
+default = ["syntax_highlighting"]
 
 # Enable syntax highlighting using syntect
 syntax_highlighting = ["syntect"]
-
-# Enable YAML support (frontmatter extraction + typed parsing).
-yaml_support = ["yaml_safe"]
 
 # -----------------------------------------------------------------------------
 # Development Dependencies
@@ -102,12 +95,6 @@ tempfile = "3.13"
 assert_fs = "1.1"
 predicates = "3.1"
 criterion = "0.8"
-# Needed only by `examples/blog.rs` so it can derive
-# Deserialize/Serialize on the demo post struct. yaml_safe
-# re-exports the traits but not the proc-macros, and yaml_safe
-# already depends on serde with the "derive" feature, so this adds
-# no new crate to the compile graph.
-serde = { version = "1", features = ["derive"] }
 
 [[bench]]
 name = "markdown_benchmark"
@@ -127,16 +114,6 @@ path = "examples/basic.rs"
 [[example]]
 name = "quickstart"
 path = "examples/quickstart.rs"
-
-[[example]]
-name = "blog"
-path = "examples/blog.rs"
-required-features = ["yaml_support"]
-
-[[example]]
-name = "typed"
-path = "examples/typed.rs"
-required-features = ["yaml_support"]
 
 [[example]]
 name = "docs"
@@ -173,11 +150,6 @@ path = "examples/pipe.rs"
 [[example]]
 name = "search"
 path = "examples/search.rs"
-
-[[example]]
-name = "site"
-path = "examples/site.rs"
-required-features = ["yaml_support"]
 
 [[example]]
 name = "bulk"

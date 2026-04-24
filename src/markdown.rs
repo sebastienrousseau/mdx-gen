@@ -208,7 +208,7 @@ impl<'a> MarkdownOptions<'a> {
     /// every string the pipeline will splice into HTML is well-
     /// formed.
     ///
-    /// Uses [`commons::validation::Validator`] so every failing
+    /// Uses [`crate::validation::Validator`] so every failing
     /// check is reported in one pass — callers get the full list
     /// of problems, not just the first. Each entry in the returned
     /// `Vec` is `(field_name, ValidationError)`.
@@ -245,9 +245,9 @@ impl<'a> MarkdownOptions<'a> {
     /// in [`crate::error`].
     pub fn validate(
         &self,
-    ) -> Result<(), Vec<(String, commons::validation::ValidationError)>>
+    ) -> Result<(), Vec<(String, crate::validation::ValidationError)>>
     {
-        use commons::validation::{ValidationError, Validator};
+        use crate::validation::{ValidationError, Validator};
 
         let mut v = Validator::new();
 
@@ -417,7 +417,7 @@ fn is_html_name(s: &str) -> bool {
 }
 
 fn check_tag_list(
-    v: &mut commons::validation::Validator,
+    v: &mut crate::validation::Validator,
     field: &str,
     tags: &[String],
 ) {
@@ -426,7 +426,7 @@ fn check_tag_list(
         let t = tag.clone();
         v.check(&f, move || {
             if !is_html_name(&t) {
-                Err(commons::validation::ValidationError::InvalidPattern {
+                Err(crate::validation::ValidationError::InvalidPattern {
                     pattern: format!(
                         "valid HTML tag name (got {t:?})"
                     ),
@@ -439,7 +439,7 @@ fn check_tag_list(
 }
 
 fn check_attr_list(
-    v: &mut commons::validation::Validator,
+    v: &mut crate::validation::Validator,
     field: &str,
     attrs: &[String],
 ) {
@@ -448,7 +448,7 @@ fn check_attr_list(
         let a = attr.clone();
         v.check(&f, move || {
             if !is_html_name(&a) {
-                Err(commons::validation::ValidationError::InvalidPattern {
+                Err(crate::validation::ValidationError::InvalidPattern {
                     pattern: format!(
                         "valid HTML attribute name (got {a:?})"
                     ),
@@ -461,7 +461,7 @@ fn check_attr_list(
 }
 
 fn check_tag_attr_map(
-    v: &mut commons::validation::Validator,
+    v: &mut crate::validation::Validator,
     field: &str,
     map: &HashMap<String, Vec<String>>,
 ) {
@@ -470,7 +470,7 @@ fn check_tag_attr_map(
         let t = tag.clone();
         v.check(&f_tag, move || {
             if !is_html_name(&t) {
-                Err(commons::validation::ValidationError::InvalidPattern {
+                Err(crate::validation::ValidationError::InvalidPattern {
                     pattern: format!(
                         "valid HTML tag name (got {t:?})"
                     ),
@@ -484,7 +484,7 @@ fn check_tag_attr_map(
 }
 
 fn check_allowed_classes_map(
-    v: &mut commons::validation::Validator,
+    v: &mut crate::validation::Validator,
     field: &str,
     map: &HashMap<String, Vec<String>>,
 ) {
@@ -493,7 +493,7 @@ fn check_allowed_classes_map(
         let t = tag.clone();
         v.check(&f_tag, move || {
             if !is_html_name(&t) {
-                Err(commons::validation::ValidationError::InvalidPattern {
+                Err(crate::validation::ValidationError::InvalidPattern {
                     pattern: format!(
                         "valid HTML tag name (got {t:?})"
                     ),
@@ -508,14 +508,14 @@ fn check_allowed_classes_map(
             v.check(&f, move || {
                 if c.is_empty() {
                     return Err(
-                        commons::validation::ValidationError::Empty,
+                        crate::validation::ValidationError::Empty,
                     );
                 }
                 if let Some(ch) = c.chars().find(|c| {
                     c.is_whitespace() || matches!(c, '"' | '\'')
                 }) {
                     return Err(
-                        commons::validation::ValidationError::InvalidPattern {
+                        crate::validation::ValidationError::InvalidPattern {
                             pattern: format!(
                                 "non-empty, no whitespace or quotes (got {ch:?})"
                             ),
@@ -2154,6 +2154,27 @@ More text.
             process_markdown_to_plain_text(&"a".repeat(64), &options)
                 .unwrap_err();
         assert!(matches!(err, MarkdownError::InputTooLarge { .. }));
+    }
+
+    #[test]
+    fn test_plain_text_includes_inline_code() {
+        // Covers the `NodeValue::Code` arm of `collect_all_text` —
+        // inline backtick code was the only text-emitting AST node
+        // variant not touched by any other plain-text test.
+        let md = "Use `println!` to print, then `drop`.";
+        let text = process_markdown_to_plain_text(
+            md,
+            &MarkdownOptions::default(),
+        )
+        .unwrap();
+        assert!(
+            text.contains("println!"),
+            "expected inline code literal, got: {text:?}"
+        );
+        assert!(
+            text.contains("drop"),
+            "expected second inline code literal, got: {text:?}"
+        );
     }
 
     // ── Math + footnote sanitizer survival ──────────────────────

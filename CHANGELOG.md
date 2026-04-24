@@ -9,6 +9,45 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+## [0.0.4] — 2026-04-24
+
+First crates.io-shipping release of the 0.0.x line. `0.0.3` was tagged
+locally but never published because the root `mdx-gen` crate depended
+on two workspace members (`crates/commons`, `crates/yaml_safe`) that
+were set to `publish = false`, so `cargo publish` could not resolve
+them on the registry. `0.0.4` removes both dependencies and ships as
+a self-contained crate.
+
+### Breaking
+
+- **`yaml_support` feature removed.** `mdx_gen::frontmatter` and the
+  three frontmatter-using examples (`blog`, `typed`, `site`) are gone.
+  The vendored `crates/yaml_safe/` parser remains on disk as reference
+  for the upcoming standalone replacement but is not a workspace
+  member and not a dependency of `mdx-gen`.
+- **`commons` dependency removed.** The only two modules mdx-gen used
+  (`commons::error`, `commons::validation`) have been surgically
+  inlined. `ValidationError` and `Validator` are now
+  [`mdx_gen::validation::ValidationError`](crate::validation::ValidationError)
+  and [`mdx_gen::validation::Validator`](crate::validation::Validator).
+  `From<commons::error::CommonError> for MarkdownError` and
+  `From<commons::validation::ValidationError> for MarkdownError` are
+  gone; `From<ValidationError>` and
+  `From<Vec<(String, ValidationError)>>` remain against the inlined
+  types. The vendored `crates/commons/` sits on disk as reference.
+- **`MarkdownError::FrontmatterError` variant removed** — no longer a
+  meaningful failure mode now that frontmatter parsing is out of tree.
+- **Workspace shrunk to `members = ["."]`.** `crates/commons` and
+  `crates/yaml_safe` are in `exclude`, preserved but not built.
+
+### Fixed
+
+- `cargo publish --dry-run` now succeeds for the root crate — the
+  underlying blocker that kept `0.0.3` unpublished.
+- Release CI: job-level permissions (`contents` / `id-token` /
+  `attestations`) now granted on the reusable-workflow caller so
+  `workflow_dispatch` no longer fails at startup.
+
 ## [0.0.3] — 2026-04-24
 
 A full rewrite of mdx-gen's internals plus a ground-up refresh of the

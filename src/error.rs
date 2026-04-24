@@ -1,5 +1,7 @@
 //! Error handling for the MDX Gen library.
 
+use crate::validation::ValidationError;
+
 /// Represents all the errors that can occur during Markdown processing.
 #[derive(thiserror::Error, Debug)]
 pub enum MarkdownError {
@@ -42,63 +44,30 @@ pub enum MarkdownError {
     #[error("HTML rendering error: {0}")]
     RenderError(String),
 
-    /// An error occurred while parsing YAML frontmatter.
-    #[error("Frontmatter error: {0}")]
-    FrontmatterError(String),
-
     /// An error occurred while writing output to a `Write` sink.
     #[error("Output write error: {0}")]
     IoError(#[from] std::io::Error),
 }
 
-/// Map a shared [`commons::error::CommonError`] into a domain
-/// [`MarkdownError`] so callers upstream in the EUXIS ecosystem can
-/// propagate failures with `?` into mdx-gen's `Result` types.
-///
-/// The mapping keeps domain-specific variants intact:
-///
-/// * `InvalidInput` / `Parse` → [`MarkdownError::ParseError`]
-/// * `Io` → [`MarkdownError::IoError`]
-/// * everything else → [`MarkdownError::ConversionError`] with the
-///   original `Display` form preserved (no information loss).
-impl From<commons::error::CommonError> for MarkdownError {
-    fn from(err: commons::error::CommonError) -> Self {
-        use commons::error::CommonError;
-        match err {
-            CommonError::InvalidInput(msg)
-            | CommonError::Parse(msg) => MarkdownError::ParseError(msg),
-            CommonError::Io(e) => MarkdownError::IoError(e),
-            other => MarkdownError::ConversionError(other.to_string()),
-        }
-    }
-}
-
-/// Map a shared [`commons::validation::ValidationError`] into a
-/// domain [`MarkdownError::InvalidOptionsError`].
-///
-/// This is the bridge that lets ecosystem-wide single-shot
-/// validation errors feed into the mdx-gen error pipeline via `?`.
-impl From<commons::validation::ValidationError> for MarkdownError {
-    fn from(err: commons::validation::ValidationError) -> Self {
+/// Map a single [`ValidationError`] into a domain
+/// [`MarkdownError::InvalidOptionsError`].
+impl From<ValidationError> for MarkdownError {
+    fn from(err: ValidationError) -> Self {
         MarkdownError::InvalidOptionsError(err.to_string())
     }
 }
 
 /// Map the multi-error form produced by
-/// [`commons::validation::Validator::finish`] into a domain
-/// [`MarkdownError::InvalidOptionsError`]. Every failing check is
-/// joined into a single human-readable message with the field name
+/// [`Validator::finish`](crate::validation::Validator::finish) into a
+/// domain [`MarkdownError::InvalidOptionsError`]. Every failing check
+/// is joined into a single human-readable message with the field name
 /// preserved.
 ///
 /// This is what
 /// [`MarkdownOptions::validate`](crate::MarkdownOptions::validate)
 /// returns; the pipeline converts via `?`.
-impl From<Vec<(String, commons::validation::ValidationError)>>
-    for MarkdownError
-{
-    fn from(
-        errors: Vec<(String, commons::validation::ValidationError)>,
-    ) -> Self {
+impl From<Vec<(String, ValidationError)>> for MarkdownError {
+    fn from(errors: Vec<(String, ValidationError)>) -> Self {
         let msg = errors
             .iter()
             .map(|(field, err)| format!("{field}: {err}"))
@@ -134,10 +103,6 @@ mod tests {
                 MarkdownError::RenderError("fmt".into()),
                 "HTML rendering error: fmt",
             ),
-            (
-                MarkdownError::FrontmatterError("invalid yaml".into()),
-                "Frontmatter error: invalid yaml",
-            ),
         ];
 
         for (error, expected) in cases {
@@ -146,43 +111,40 @@ mod tests {
     }
 
     #[test]
-    fn test_from_common_error_parse() {
-        let err: MarkdownError =
-            commons::error::CommonError::InvalidInput("bad".into())
-                .into();
-        assert!(matches!(err, MarkdownError::ParseError(_)));
-
-        let err: MarkdownError =
-            commons::error::CommonError::Parse("syntax".into()).into();
-        assert!(matches!(err, MarkdownError::ParseError(_)));
-    }
-
-    #[test]
-    fn test_from_common_error_io() {
-        let source =
-            std::io::Error::new(std::io::ErrorKind::BrokenPipe, "nope");
-        let err: MarkdownError =
-            commons::error::CommonError::Io(source).into();
-        assert!(matches!(err, MarkdownError::IoError(_)));
-    }
-
-    #[test]
-    fn test_from_common_error_other_preserves_display() {
-        let err: MarkdownError =
-            commons::error::CommonError::NotFound("x".into()).into();
-        match err {
-            MarkdownError::ConversionError(msg) => {
-                assert!(msg.contains("Not found"));
-                assert!(msg.contains('x'));
-            }
-            other => panic!("unexpected variant: {other:?}"),
-        }
-    }
-
-    #[test]
     fn test_from_validation_error() {
-        let err: MarkdownError =
-            commons::validation::ValidationError::Empty.into();
-        assert!(matches!(err, MarkdownError::InvalidOptionsError(_)));
+        // Exact-string assertion on Display (which `thiserror` derives
+        // from the `#[error(...)]` attribute on `InvalidOptionsError`)
+        // implicitly proves the variant is `InvalidOptionsError` — no
+        // pattern-match branch whose no-match arm would be
+        // uncoverable.
+        let err: MarkdownError = ValidationError::Empty.into();
+        assert_eq!(
+            err.to_string(),
+            "Invalid Markdown options: Value cannot be empty"
+        );
+    }
+
+    #[test]
+    fn test_from_validation_error_vec_joins_fields() {
+        let errs = vec![
+            ("name".into(), ValidationError::Empty),
+            (
+                "pattern".into(),
+                ValidationError::InvalidPattern {
+                    pattern: "email".into(),
+                },
+            ),
+        ];
+        let err: MarkdownError = errs.into();
+        let msg = err.to_string();
+        assert!(
+            msg.starts_with("Invalid Markdown options: "),
+            "expected InvalidOptionsError Display prefix, got: {msg}"
+        );
+        assert!(msg.contains("name: Value cannot be empty"));
+        assert!(
+            msg.contains("pattern: Value doesn't match pattern: email")
+        );
+        assert!(msg.contains("; "));
     }
 }
