@@ -3,7 +3,9 @@
 //! Inlined from the formerly-vendored `euxis-commons` crate so
 //! `mdx-gen` has no path-only workspace dependencies at publish time.
 //! The surface is trimmed to what the crate actually uses:
-//! [`ValidationError`], [`Validator`], and a `ValidationResult` alias.
+//! [`ValidationError`](crate::validation::ValidationError),
+//! [`Validator`](crate::validation::Validator), and a
+//! [`ValidationResult`](crate::validation::ValidationResult) alias.
 //!
 //! [`MarkdownOptions::validate`]: crate::MarkdownOptions::validate
 

@@ -234,6 +234,26 @@ match process_markdown(&huge, &options) {
 
 `MarkdownError` covers `ParseError`, `RenderError`, `CustomBlockError`, `InputTooLarge`, `IoError` (writer path), `InvalidOptionsError` (from `validate`), and others. It implements `From<std::io::Error>` and `From<ValidationError>` so errors flow via `?`.
 
+### Structured validation errors
+
+`MarkdownOptions::validate()` returns `Result<(), Vec<(String, ValidationError)>>` — every failing check surfaces with its field name and a typed `ValidationError` variant. The pipeline folds this into a single `MarkdownError::InvalidOptionsError` when you call `process_markdown`, but callers can inspect the structured form directly before running the pipeline:
+
+```rust
+use mdx_gen::{MarkdownOptions, ValidationError};
+
+let options = MarkdownOptions::default().with_header_ids("bad id");
+if let Err(errors) = options.validate() {
+    for (field, err) in &errors {
+        match err {
+            ValidationError::InvalidPattern { pattern } => {
+                eprintln!("{field}: expected {pattern}");
+            }
+            other => eprintln!("{field}: {other}"),
+        }
+    }
+}
+```
+
 ---
 
 ## Examples (14 standalone + 1 runner)
