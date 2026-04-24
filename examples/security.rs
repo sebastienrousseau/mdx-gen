@@ -5,8 +5,8 @@
 //!
 //! Run: `cargo run --example security`
 //!
-//! Lives as exec'd documentation of the hardening that landed in
-//! 0.0.3: ammonia sanitiser tuned for safe defaults, `style`
+//! Lives as exec'd documentation of the hardening that ships in
+//! 0.0.4: ammonia sanitiser tuned for safe defaults, `style`
 //! attribute removed, input cap on by default. Each task feeds a
 //! known attack pattern through `process_markdown` with
 //! `allow_unsafe_html = false` and asserts the output is safe.
@@ -62,7 +62,7 @@ fn main() {
             .collect()
     });
 
-    // ── Clickjacking via inline style (post-0.0.3) ───────────────────
+    // ── Clickjacking via inline style ────────────────────────────────
     support::task_with_output("Strip inline style overlays", || {
         let payloads = [
             r#"<div style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999"></div>"#,

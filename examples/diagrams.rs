@@ -150,13 +150,13 @@ dependencies, and completion status across a release window.
 ```mermaid
 gantt
   dateFormat  YYYY-MM-DD
-  title       v0.0.3 release runway
+  title       v0.0.4 release runway
   section Core
-  AST pipeline         :done,    p1, 2026-03-15, 7d
-  Sanitizer hardening  :done,    p2, after p1, 5d
+  Inline commons       :done,    p1, 2026-04-22, 2d
+  Drop yaml_support    :done,    p2, after p1, 1d
   section Polish
-  Examples + CHANGELOG :done,    p3, after p2, 4d
-  Diagrams             :active,  p4, after p3, 3d
+  Docs + re-exports    :done,    p3, after p2, 1d
+  Coverage polish      :active,  p4, after p3, 1d
   section Launch
   Tag + publish        :         p5, after p4, 1d
 ```
@@ -169,14 +169,14 @@ merges, tags, and commit progressions on a release branch.
 ```mermaid
 gitGraph
   commit id: "init"
-  branch feat/v0.0.3
-  checkout feat/v0.0.3
-  commit id: "AST pipeline"
-  commit id: "Sanitizer"
-  commit id: "ToC"
+  branch feat/v0.0.4
+  checkout feat/v0.0.4
+  commit id: "inline commons"
+  commit id: "drop yaml_support"
+  commit id: "docs + coverage"
   checkout main
-  merge feat/v0.0.3 tag: "v0.0.3"
-  commit id: "changelog"
+  merge feat/v0.0.4 tag: "v0.0.4"
+  commit id: "post-release"
 ```
 
 ## User journey
