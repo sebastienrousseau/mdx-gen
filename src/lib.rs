@@ -23,9 +23,6 @@ pub mod diagrams;
 #[cfg(feature = "syntax_highlighting")]
 pub mod highlight;
 
-/// YAML frontmatter extraction and parsing.
-pub mod frontmatter;
-
 /// Validation primitives used by [`MarkdownOptions::validate`].
 pub mod validation;
 

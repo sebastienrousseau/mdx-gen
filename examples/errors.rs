@@ -102,9 +102,6 @@ fn main() {
                     "failed to load defaults".into(),
                 ),
                 MarkdownError::RenderError("non-UTF-8 output".into()),
-                MarkdownError::FrontmatterError(
-                    "unexpected node in mapping".into(),
-                ),
             ];
             variants.iter().map(|e| format!("{e}")).collect()
         },

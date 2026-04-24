@@ -21,10 +21,6 @@ coverage:
       paths:
         - src/
       carryforward: true
-    yaml-safe:
-      paths:
-        - crates/yaml_safe/
-      carryforward: true
 
 component_management:
   individual_components:
@@ -32,7 +28,3 @@ component_management:
       name: mdx-gen library
       paths:
         - src/**
-    - component_id: yaml-safe
-      name: yaml_safe (vendored)
-      paths:
-        - crates/yaml_safe/**

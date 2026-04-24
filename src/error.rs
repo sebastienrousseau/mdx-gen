@@ -44,10 +44,6 @@ pub enum MarkdownError {
     #[error("HTML rendering error: {0}")]
     RenderError(String),
 
-    /// An error occurred while parsing YAML frontmatter.
-    #[error("Frontmatter error: {0}")]
-    FrontmatterError(String),
-
     /// An error occurred while writing output to a `Write` sink.
     #[error("Output write error: {0}")]
     IoError(#[from] std::io::Error),
@@ -106,10 +102,6 @@ mod tests {
             (
                 MarkdownError::RenderError("fmt".into()),
                 "HTML rendering error: fmt",
-            ),
-            (
-                MarkdownError::FrontmatterError("invalid yaml".into()),
-                "Frontmatter error: invalid yaml",
             ),
         ];
 

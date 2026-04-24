@@ -5,7 +5,7 @@
 <h1 align="center">MDX Gen</h1>
 
 <p align="center">
-  <strong>A Rust library for processing Markdown into HTML with custom blocks, enhanced tables, class-based syntax highlighting, a hardened sanitizer, frontmatter parsing, table-of-contents extraction, streaming output, and client-side mermaid diagrams.</strong>
+  <strong>A Rust library for processing Markdown into HTML with custom blocks, enhanced tables, class-based syntax highlighting, a hardened sanitizer, table-of-contents extraction, streaming output, and client-side mermaid diagrams.</strong>
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
   <a href="https://crates.io/crates/mdx-gen"><img src="https://img.shields.io/crates/v/mdx-gen.svg?style=for-the-badge&color=fc8d62&logo=rust" alt="Crates.io" /></a>
   <a href="https://docs.rs/mdx-gen"><img src="https://img.shields.io/badge/docs.rs-mdx--gen-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="Docs.rs" /></a>
   <a href="https://codecov.io/gh/sebastienrousseau/mdx-gen"><img src="https://img.shields.io/codecov/c/github/sebastienrousseau/mdx-gen?style=for-the-badge&logo=codecov" alt="Coverage" /></a>
-  <a href="https://lib.rs/crates/mdx-gen"><img src="https://img.shields.io/badge/lib.rs-v0.0.3-orange.svg?style=for-the-badge" alt="lib.rs" /></a>
+  <a href="https://lib.rs/crates/mdx-gen"><img src="https://img.shields.io/badge/lib.rs-v0.0.4-orange.svg?style=for-the-badge" alt="lib.rs" /></a>
 </p>
 
 ---
@@ -28,7 +28,7 @@ Or add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-mdx-gen = "0.0.3"
+mdx-gen = "0.0.4"
 ```
 
 Requires [Rust](https://rustup.rs/) 1.88.0 or later. Works on macOS, Linux, and Windows.
@@ -59,7 +59,6 @@ Pipeline stages:
 | **Enhanced tables** | AST-level responsive wrappers and alignment classes |
 | **Table of contents** | `Vec<Heading>` in document order with anchor ids |
 | **Streaming output** | Write directly into any `std::io::Write` sink |
-| **Frontmatter** | YAML frontmatter extraction + typed parsing via serde |
 | **Mermaid diagrams** | Client-side hydration of fenced `mermaid` blocks |
 | **Plain-text extraction** | For search indexes, excerpts, reading-time |
 | **Hardened sanitizer** | No inline `style`, cached `ammonia::Builder` |
@@ -131,23 +130,6 @@ assert!(text.contains("code"));
 ```
 
 Useful for feeding search indexes, excerpt generators, or reading-time estimators.
-
-### YAML frontmatter
-
-```rust
-use mdx_gen::frontmatter::{extract_frontmatter, parse_frontmatter_as};
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize)]
-struct Post { title: String, tags: Vec<String> }
-
-let source = "---\ntitle: Hello\ntags: [one, two]\n---\n# Body\n";
-let (fm, body) = extract_frontmatter(source);
-let post: Post = parse_frontmatter_as(fm.unwrap()).unwrap();
-assert_eq!(post.title, "Hello");
-```
-
-Frontmatter delimiters (`---`) must sit at byte 0 (same rule as Jekyll, Hugo, most CommonMark consumers).
 
 ### Class-based syntax highlighting
 
@@ -250,23 +232,23 @@ match process_markdown(&huge, &options) {
 }
 ```
 
-`MarkdownError` covers `ParseError`, `RenderError`, `CustomBlockError`, `InputTooLarge`, `IoError` (writer path), `InvalidOptionsError` (from `validate`), and others. It implements `From<std::io::Error>`, `From<commons::error::CommonError>`, and `From<commons::validation::ValidationError>` so ecosystem errors flow via `?`.
+`MarkdownError` covers `ParseError`, `RenderError`, `CustomBlockError`, `InputTooLarge`, `IoError` (writer path), `InvalidOptionsError` (from `validate`), and others. It implements `From<std::io::Error>` and `From<ValidationError>` so errors flow via `?`.
 
 ---
 
-## Examples (18 standalone + 1 runner)
+## Examples (14 standalone + 1 runner)
 
 Each example is an independently-runnable binary (`cargo run --example <name>`):
 
 | Group | Examples |
 | --- | --- |
 | Onboarding | `basic`, `quickstart` |
-| Scenarios | `blog`, `typed`, `docs`, `alerts`, `cms`, `security`, `site`, `diagrams` |
+| Scenarios | `docs`, `alerts`, `cms`, `security`, `diagrams` |
 | Output channels | `styling`, `gallery`, `streaming`, `pipe` |
 | Integrators | `search`, `bulk`, `errors` |
 | Runner | `all` |
 
-Pick `site` or `blog` for a realistic end-to-end walkthrough; `security` doubles as a red-team regression suite (XSS, clickjacking, `javascript:` URLs, oversized input, blockquote bombs).
+Start with `quickstart` or `docs` for a realistic walkthrough; `security` doubles as a red-team regression suite (XSS, clickjacking, `javascript:` URLs, oversized input, blockquote bombs).
 
 ---
 
@@ -275,28 +257,32 @@ Pick `site` or `blog` for a realistic end-to-end walkthrough; `security` doubles
 | Flag                  | Default | Description |
 | --------------------- | :-----: | --- |
 | `syntax_highlighting` | ✓       | Enable `syntect`-backed highlighter, `theme_css`, `apply_syntax_highlighting` |
-| `yaml_support`        | ✓       | Enable YAML frontmatter via the vendored `yaml_safe` crate |
 
 Minimal build: `cargo build --no-default-features`.
 
 ---
 
-## Breaking changes in 0.0.3
+## Breaking changes in 0.0.4
+
+If you are upgrading from `0.0.3` (source only — `0.0.3` never shipped to crates.io):
+
+- **`yaml_support` feature removed.** `mdx_gen::frontmatter` is gone. The vendored `yaml_safe` parser is parked on disk and will return through a standalone crate in a later release.
+- **`commons` dependency removed.** `MarkdownOptions::validate` now returns `Result<(), Vec<(String, ValidationError)>>` using the in-crate [`mdx_gen::validation::ValidationError`](crate::validation::ValidationError). The old `From<commons::error::CommonError>` and `From<commons::validation::ValidationError>` impls on `MarkdownError` are gone.
+- **`MarkdownError::FrontmatterError` variant removed.** No more frontmatter path = no variant to carry.
 
 If you are upgrading from `0.0.2`:
 
-- **MSRV raised to 1.88.** Required by the vendored `commons` crate (edition 2024).
+- **MSRV raised to 1.88.**
 - **Syntax highlighter is now class-based.** Code blocks render as `<span class="…">` tokens instead of inline `style="color:#…"`. Generate a matching stylesheet with `mdx_gen::theme_css(theme_name)`.
 - **Sanitizer no longer permits `style` on any tag.** Opt back in (trusted content only) via `SanitizerConfig::with_generic_attribute("style")`.
-- **Frontmatter requires `---` at byte 0.** Leading whitespace before the opening delimiter no longer triggers detection.
-- **`MarkdownOptions::validate`** now returns `Result<(), Vec<(String, ValidationError)>>` and runs nine consistency checks; every failing check surfaces with its field name. The pipeline still converts the result into a single `MarkdownError::InvalidOptionsError` for callers of `process_markdown`.
+- **`MarkdownOptions::validate`** runs nine consistency checks; every failing check surfaces with its field name. The pipeline still converts the result into a single `MarkdownError::InvalidOptionsError` for callers of `process_markdown`.
 
-New surfaces in this release:
+New surfaces since `0.0.2`:
 
 - `process_markdown_to_writer`, `process_markdown_with_toc`, `process_markdown_with_toc_to_writer`, `process_markdown_to_plain_text`.
 - `MarkdownOptions::with_diagrams` + `hydration_script_html()` — client-side mermaid rendering.
 - `SanitizerConfig`, `Heading`, `collect_headings`, `theme_css`.
-- `MarkdownError::IoError`, plus `From` impls for `commons::error::CommonError` and `commons::validation::ValidationError`.
+- `MarkdownError::IoError`, plus `From<ValidationError>` impls for composing validation results.
 - `fuzz/` workspace with three `libfuzzer-sys` targets for ongoing parser hardening.
 
 Full release notes: [CHANGELOG.md](CHANGELOG.md).
