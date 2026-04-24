@@ -28,3 +28,4 @@ jobs:
     with:
       type: rust
       redirect-crate: mdx-gen
+      cname: doc.mdxgen.com

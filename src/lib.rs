@@ -3,8 +3,8 @@
 // src/lib.rs
 #![doc = include_str!("../README.md")]
 #![doc(
-    html_favicon_url = "https://kura.pro/mdx-gen/images/favicon.ico",
-    html_logo_url = "https://kura.pro/mdx-gen/images/logos/mdx-gen.svg",
+    html_favicon_url = "https://cloudcdn.pro/mdx-gen/v1/favicon.ico",
+    html_logo_url = "https://cloudcdn.pro/mdx-gen/v1/logos/mdx-gen.svg",
     html_root_url = "https://docs.rs/mdx-gen"
 )]
 #![crate_name = "mdx_gen"]

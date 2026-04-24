@@ -4,10 +4,17 @@ coverage:
       default:
         target: 90%
         threshold: 5%
+        # First-time integration: Codecov has no baseline on `main`
+        # until this PR merges. Mark the check informational so it
+        # reports coverage without blocking the PR; tighten to
+        # `informational: false` after the first successful upload
+        # on the default branch.
+        informational: true
     patch:
       default:
         target: 85%
         threshold: 10%
+        informational: true
 
   flags:
     mdx-gen:

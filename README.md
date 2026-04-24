@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://kura.pro/mdx-gen/images/logos/mdx-gen.svg" alt="MDX Gen logo" width="128" />
+  <img src="https://cloudcdn.pro/mdx-gen/v1/logos/mdx-gen.svg" alt="MDX Gen logo" width="128" />
 </p>
 
 <h1 align="center">MDX Gen</h1>
