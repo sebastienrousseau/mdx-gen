@@ -1,3 +1,15 @@
+# Files that live in the repo for reference / tooling but are not
+# part of the tested `mdx-gen` crate. Without this, Codecov computes
+# project coverage over every tracked source file, including the
+# parked vendored crates under `crates/` (see `workspace.exclude` in
+# `Cargo.toml`), which sinks the percentage to ~24% even though the
+# shipping crate itself sits at >98%.
+ignore:
+  - "crates/**"  # Parked vendored crates — not in the workspace
+  - "fuzz/**"    # Separate fuzz workspace, runs on nightly only
+  - "examples/**"  # Demo binaries, not the library surface under test
+  - "benches/**"   # Criterion harnesses, not library code
+
 coverage:
   status:
     project:

@@ -112,8 +112,16 @@ mod tests {
 
     #[test]
     fn test_from_validation_error() {
+        // Exact-string assertion on Display (which `thiserror` derives
+        // from the `#[error(...)]` attribute on `InvalidOptionsError`)
+        // implicitly proves the variant is `InvalidOptionsError` — no
+        // pattern-match branch whose no-match arm would be
+        // uncoverable.
         let err: MarkdownError = ValidationError::Empty.into();
-        assert!(matches!(err, MarkdownError::InvalidOptionsError(_)));
+        assert_eq!(
+            err.to_string(),
+            "Invalid Markdown options: Value cannot be empty"
+        );
     }
 
     #[test]
@@ -128,9 +136,11 @@ mod tests {
             ),
         ];
         let err: MarkdownError = errs.into();
-        let MarkdownError::InvalidOptionsError(msg) = err else {
-            panic!("expected InvalidOptionsError")
-        };
+        let msg = err.to_string();
+        assert!(
+            msg.starts_with("Invalid Markdown options: "),
+            "expected InvalidOptionsError Display prefix, got: {msg}"
+        );
         assert!(msg.contains("name: Value cannot be empty"));
         assert!(
             msg.contains("pattern: Value doesn't match pattern: email")
