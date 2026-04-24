@@ -2156,6 +2156,27 @@ More text.
         assert!(matches!(err, MarkdownError::InputTooLarge { .. }));
     }
 
+    #[test]
+    fn test_plain_text_includes_inline_code() {
+        // Covers the `NodeValue::Code` arm of `collect_all_text` —
+        // inline backtick code was the only text-emitting AST node
+        // variant not touched by any other plain-text test.
+        let md = "Use `println!` to print, then `drop`.";
+        let text = process_markdown_to_plain_text(
+            md,
+            &MarkdownOptions::default(),
+        )
+        .unwrap();
+        assert!(
+            text.contains("println!"),
+            "expected inline code literal, got: {text:?}"
+        );
+        assert!(
+            text.contains("drop"),
+            "expected second inline code literal, got: {text:?}"
+        );
+    }
+
     // ── Math + footnote sanitizer survival ──────────────────────
 
     #[test]
