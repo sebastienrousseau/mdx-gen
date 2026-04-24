@@ -26,6 +26,9 @@ pub mod highlight;
 /// YAML frontmatter extraction and parsing.
 pub mod frontmatter;
 
+/// Validation primitives used by [`MarkdownOptions::validate`].
+pub mod validation;
+
 /// The `markdown` module contains the core processing pipeline.
 pub mod markdown;
 

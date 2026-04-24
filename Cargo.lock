@@ -877,7 +877,6 @@ dependencies = [
  "assert_fs",
  "comrak",
  "criterion 0.8.2",
- "euxis-commons",
  "html-escape",
  "log",
  "predicates",

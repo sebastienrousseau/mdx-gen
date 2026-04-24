@@ -56,12 +56,6 @@ autoexamples = false
 
 [dependencies]
 ammonia = "4.1"
-# Shared EUXIS-ecosystem utilities. Vendored at crates/commons (see
-# that crate's Cargo.toml for the upstream pointer). The `error` and
-# `validation` features give mdx-gen idiomatic hooks for cross-crate
-# error interop and the shared ValidationError type used by
-# MarkdownOptions::validate.
-commons = { package = "euxis-commons", path = "crates/commons", version = "0.0.3", default-features = false, features = ["error", "validation"] }
 comrak = { version = "0.52", default-features = false }
 html-escape = "0.2"
 log = "0.4"
