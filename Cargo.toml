@@ -42,9 +42,17 @@ categories = [
 
 keywords = ["markdown", "html", "generator", "mdx-gen", "static"]
 
-# Exclude unnecessary files from the crate
+# Exclude unnecessary files from the crate (dev tooling, editor
+# state, and assistant / session runtime artefacts that happen to
+# sit next to the source tree).
 exclude = [
-    "/.git/*", "/.github/*", "/.gitignore", "/.vscode/*"
+    "/.git/*",
+    "/.github/*",
+    "/.gitignore",
+    "/.vscode/*",
+    "/.claude/*",
+    "/.cursor/*",
+    "/.idea/*",
 ]
 
 # Examples share a `support.rs` helper module that is not itself a

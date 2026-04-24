@@ -1,6 +1,9 @@
 *.DS_Store
 *.profraw
 *.log
+/.claude/
+/.cursor/
+/.idea/
 /.vscode/
 /output/
 /public/
