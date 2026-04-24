@@ -84,8 +84,14 @@ pub struct MarkdownOptions<'a> {
 
 impl<'a> Default for MarkdownOptions<'a> {
     fn default() -> Self {
+        // Keep the default internally consistent: enhanced tables
+        // depend on comrak's `extension.table`, so enable both
+        // together. Callers who want either piece off can disable
+        // via the builder.
+        let mut comrak_options = Options::default();
+        comrak_options.extension.table = true;
         Self {
-            comrak_options: Options::default(),
+            comrak_options,
             enable_custom_blocks: true,
             enable_syntax_highlighting: true,
             enable_enhanced_tables: true,

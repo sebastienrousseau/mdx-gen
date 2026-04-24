@@ -16,7 +16,7 @@ pub mod error;
 /// The `extensions` module contains custom block and table extensions.
 pub mod extensions;
 
-/// Diagram code-block rendering (mermaid, geojson, topojson, stl).
+/// Mermaid diagram rendering for fenced `mermaid` code blocks.
 pub mod diagrams;
 
 /// Syntax highlighting adapter for comrak's plugin system.
@@ -55,9 +55,9 @@ pub use extensions::CustomBlockConfig;
 pub use extensions::CustomBlockType;
 pub use extensions::Heading;
 
-/// Script block that hydrates client-side diagram containers
-/// ([`mermaid`](diagrams) / `geojson` / `topojson` / `stl`) into
-/// inline SVG. Embed once per page — typically before `</body>`.
+/// Script block that hydrates client-side `<pre class="mermaid">`
+/// containers into inline SVG. Embed once per page — typically
+/// before `</body>`.
 pub use diagrams::hydration_script_html;
 
 /// Processes a Markdown string and converts it into HTML.
