@@ -1,0 +1,38 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 90%
+        threshold: 5%
+        # First-time integration: Codecov has no baseline on `main`
+        # until this PR merges. Mark the check informational so it
+        # reports coverage without blocking the PR; tighten to
+        # `informational: false` after the first successful upload
+        # on the default branch.
+        informational: true
+    patch:
+      default:
+        target: 85%
+        threshold: 10%
+        informational: true
+
+  flags:
+    mdx-gen:
+      paths:
+        - src/
+      carryforward: true
+    yaml-safe:
+      paths:
+        - crates/yaml_safe/
+      carryforward: true
+
+component_management:
+  individual_components:
+    - component_id: mdx-gen
+      name: mdx-gen library
+      paths:
+        - src/**
+    - component_id: yaml-safe
+      name: yaml_safe (vendored)
+      paths:
+        - crates/yaml_safe/**

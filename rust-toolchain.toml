@@ -1,0 +1,11 @@
+# Pin contributors to the same toolchain CI uses.
+#
+# Tracks the `stable` channel — `rustup update` picks up new
+# releases. The `components` list guarantees `clippy` + `rustfmt`
+# are present so the pre-push hook under `.githooks/pre-push` runs
+# to completion without a manual rustup install.
+
+[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

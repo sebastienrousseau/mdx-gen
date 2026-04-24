@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD033 MD041 -->
-<img src="https://kura.pro/mdx-gen/images/logos/mdx-gen.svg"
+<img src="https://cloudcdn.pro/mdx-gen/v1/logos/mdx-gen.svg"
 alt="MDX Gen logo" height="66" align="right" />
 <!-- markdownlint-enable MD033 MD041 -->
 

@@ -1,0 +1,23 @@
+[package]
+name = "yaml_safe"
+version = "0.1.0"
+edition = "2021"
+description = "Pure-Rust YAML serde implementation (no unsafe, no libyml)"
+license = "MIT OR Apache-2.0"
+# Vendored copy of github.com/sebastienrousseau/yaml_safe — kept in
+# the workspace so mdx-gen can ship without a path/registry split.
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+indexmap = "2"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "parse_bench"
+harness = false
+
+[lints.rust]
+unsafe_code = "forbid"

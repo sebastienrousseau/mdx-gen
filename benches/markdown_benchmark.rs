@@ -3,12 +3,12 @@
 
 #![allow(missing_docs)]
 
-use comrak::ComrakOptions;
+use comrak::Options;
 use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion,
-    Throughput,
+    criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
 use mdx_gen::{process_markdown, MarkdownOptions};
+use std::hint::black_box;
 
 /// Create a valid MarkdownOptions configuration
 fn create_valid_options(
@@ -17,7 +17,7 @@ fn create_valid_options(
     enhanced_tables: bool,
     enable_comrak_tables: bool,
 ) -> MarkdownOptions<'static> {
-    let mut comrak_options = ComrakOptions::default();
+    let mut comrak_options = Options::default();
     comrak_options.extension.table = enable_comrak_tables;
 
     MarkdownOptions::new()

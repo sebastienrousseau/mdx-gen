@@ -92,7 +92,15 @@ mod tests {
             result.contains("Hello, world!"),
             "Code block content was not processed correctly"
         );
-        assert!(result.contains("color:#a3be8c;"), "Syntax highlighting style for string was not applied correctly");
+        // Highlighter now emits class-based spans (no inline styles).
+        assert!(
+            result.contains("<span class=\""),
+            "Expected class-based syntax spans in: {result}"
+        );
+        assert!(
+            !result.contains(" style=\""),
+            "Inline style attributes should no longer appear: {result}"
+        );
     }
 
     #[test]
@@ -105,7 +113,8 @@ mod tests {
                 let mut opts = Options::default();
                 opts.extension.table = false;
                 opts
-            });
+            })
+            .with_unsafe_html(true);
         let result = process_markdown(markdown, &options);
         assert!(result.is_ok(), "Processing Markdown with HTML tags should not result in an error. Error: {:?}", result.err());
         let html = result.unwrap();
@@ -165,7 +174,8 @@ mod tests {
                 let mut opts = Options::default();
                 opts.extension.table = false; // Ensure table extension is disabled
                 opts
-            });
+            })
+            .with_unsafe_html(true);
 
         let result = process_markdown(markdown, &options);
         assert!(

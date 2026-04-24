@@ -1,6 +1,23 @@
 use comrak::Options;
 use mdx_gen::{process_markdown, MarkdownOptions};
 
+/// Creates a fully-featured set of options with all extensions enabled.
+fn all_features_options() -> MarkdownOptions<'static> {
+    MarkdownOptions::new()
+        .with_custom_blocks(true)
+        .with_syntax_highlighting(true)
+        .with_enhanced_tables(true)
+        .with_comrak_options({
+            let mut opts = Options::default();
+            opts.extension.table = true;
+            opts.extension.strikethrough = true;
+            opts.extension.tasklist = true;
+            opts.extension.autolink = true;
+            opts
+        })
+        .with_unsafe_html(true)
+}
+
 #[test]
 fn test_complex_markdown_with_all_features() {
     let markdown = r#"
@@ -48,18 +65,7 @@ Here's a paragraph with **bold** and *italic* text, followed by a list:
 
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(
@@ -114,18 +120,7 @@ This is a simple paragraph with **bold text** and *italic text*.
 Another paragraph.
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(
@@ -153,18 +148,7 @@ fn test_links_and_images() {
 ![Rust logo](https://www.rust-lang.org/static/images/rust-logo-blk.svg)
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(
@@ -193,18 +177,7 @@ fn test_lists_and_blockquotes() {
 > This is a blockquote.
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(
@@ -231,18 +204,7 @@ This is some inline `code`.
 Another line followed by an HR.
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(
@@ -267,18 +229,7 @@ fn test_strikethrough_and_tasklist() {
 - [ ] Task 2
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(
@@ -313,18 +264,7 @@ fn test_autolink_urls() {
 Here is a URL: https://www.example.com
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(
@@ -347,18 +287,7 @@ fn test_nested_blockquotes() {
 > > This is a nested blockquote.
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(
@@ -379,18 +308,7 @@ fn test_emphasis_in_block_elements() {
 > **Bold text** and *italic text* inside a blockquote.
 "#;
 
-    let options = MarkdownOptions::new()
-        .with_custom_blocks(true)
-        .with_syntax_highlighting(true)
-        .with_enhanced_tables(true)
-        .with_comrak_options({
-            let mut opts = Options::default();
-            opts.extension.table = true;
-            opts.extension.strikethrough = true;
-            opts.extension.tasklist = true;
-            opts.extension.autolink = true;
-            opts
-        });
+    let options = all_features_options();
 
     let result = process_markdown(markdown, &options);
     assert!(

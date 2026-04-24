@@ -3,11 +3,18 @@
 # with support for custom blocks, enhanced table formatting, and flexible configuration options.
 # -----------------------------------------------------------------------------
 
+[workspace]
+members = [".", "crates/commons", "crates/yaml_safe"]
+# The fuzz/ crate has its own [workspace] table and pulls in
+# libfuzzer-sys, which we don't want in the main build graph.
+exclude = ["fuzz"]
+resolver = "2"
+
 [package]
 name = "mdx-gen"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
-rust-version = "1.56.0"
+rust-version = "1.88.0"
 license = "MIT OR Apache-2.0"
 description = """
 A robust Rust library for processing Markdown and converting it to HTML with support for custom blocks, enhanced table formatting, and flexible configuration options.
@@ -37,25 +44,31 @@ exclude = [
     "/.git/*", "/.github/*", "/.gitignore", "/.vscode/*"
 ]
 
+# Examples share a `support.rs` helper module that is not itself a
+# runnable example. Auto-discovery would try to compile it as one
+# (and fail, because it has no `fn main()`), so each example is
+# declared explicitly below.
+autoexamples = false
+
 # -----------------------------------------------------------------------------
 # Dependencies
 # -----------------------------------------------------------------------------
 
 [dependencies]
-anyhow = "1.0"
-comrak = "0.50"
-env_logger = "0.11"
+ammonia = "4.1"
+# Shared EUXIS-ecosystem utilities. Vendored at crates/commons (see
+# that crate's Cargo.toml for the upstream pointer). The `error` and
+# `validation` features give mdx-gen idiomatic hooks for cross-crate
+# error interop and the shared ValidationError type used by
+# MarkdownOptions::validate.
+commons = { package = "euxis-commons", path = "crates/commons", version = "0.0.3", default-features = false, features = ["error", "validation"] }
+comrak = { version = "0.52", default-features = false }
 html-escape = "0.2"
-lazy_static = "1.5"
 log = "0.4"
 regex = "1.12"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0"
-serde_yml = { version = "0.0.12", optional = true }
-syntect = { version = "5.2", optional = true }
+yaml_safe = { path = "crates/yaml_safe", version = "0.1", optional = true }
+syntect = { version = "5.2", optional = true, default-features = false, features = ["default-themes", "default-syntaxes", "html", "regex-fancy"] }
 thiserror = "2.0"
-tokio = { version = "1.50", features = ["full"] }
-toml = "0.8"
 
 [build-dependencies]
 version_check = "0.9"
@@ -69,20 +82,16 @@ path = "src/lib.rs"
 # -----------------------------------------------------------------------------
 
 [features]
-# Default feature set includes syntax highlighting, custom blocks, and enhanced tables.
-default = ["syntax_highlighting", "custom_blocks", "enhanced_tables"]
+# Default feature set: syntax highlighting + YAML frontmatter. Users
+# who want a minimal build can opt out with `--no-default-features`
+# and then enable just the features they need.
+default = ["syntax_highlighting", "yaml_support"]
 
 # Enable syntax highlighting using syntect
 syntax_highlighting = ["syntect"]
 
-# Enable custom block processing
-custom_blocks = []
-
-# Enable enhanced table formatting
-enhanced_tables = []
-
-# Enable YAML support
-yaml_support = ["serde_yml"]
+# Enable YAML support (frontmatter extraction + typed parsing).
+yaml_support = ["yaml_safe"]
 
 # -----------------------------------------------------------------------------
 # Development Dependencies
@@ -92,11 +101,134 @@ yaml_support = ["serde_yml"]
 tempfile = "3.13"
 assert_fs = "1.1"
 predicates = "3.1"
-criterion = "0.5"
+criterion = "0.8"
+# Needed only by `examples/blog.rs` so it can derive
+# Deserialize/Serialize on the demo post struct. yaml_safe
+# re-exports the traits but not the proc-macros, and yaml_safe
+# already depends on serde with the "derive" feature, so this adds
+# no new crate to the compile graph.
+serde = { version = "1", features = ["derive"] }
 
 [[bench]]
 name = "markdown_benchmark"
 harness = false
 
+# ── Examples ──────────────────────────────────────────────────────
+#
+# `autoexamples = false` in the [package] table above disables
+# auto-discovery so the shared `support.rs` helper is not compiled
+# as a standalone example. Every example must therefore be
+# declared here.
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "quickstart"
+path = "examples/quickstart.rs"
+
+[[example]]
+name = "blog"
+path = "examples/blog.rs"
+required-features = ["yaml_support"]
+
+[[example]]
+name = "typed"
+path = "examples/typed.rs"
+required-features = ["yaml_support"]
+
+[[example]]
+name = "docs"
+path = "examples/docs.rs"
+
+[[example]]
+name = "alerts"
+path = "examples/alerts.rs"
+
+[[example]]
+name = "cms"
+path = "examples/cms.rs"
+
+[[example]]
+name = "security"
+path = "examples/security.rs"
+
+[[example]]
+name = "styling"
+path = "examples/styling.rs"
+
+[[example]]
+name = "gallery"
+path = "examples/gallery.rs"
+
+[[example]]
+name = "streaming"
+path = "examples/streaming.rs"
+
+[[example]]
+name = "pipe"
+path = "examples/pipe.rs"
+
+[[example]]
+name = "search"
+path = "examples/search.rs"
+
+[[example]]
+name = "site"
+path = "examples/site.rs"
+required-features = ["yaml_support"]
+
+[[example]]
+name = "bulk"
+path = "examples/bulk.rs"
+
+[[example]]
+name = "errors"
+path = "examples/errors.rs"
+
+[[example]]
+name = "diagrams"
+path = "examples/diagrams.rs"
+
+[[example]]
+name = "all"
+path = "examples/all.rs"
+
 [profile.bench]
 debug = true
+
+[profile.dev]
+codegen-units = 256
+debug = true
+debug-assertions = true
+incremental = true
+lto = false
+opt-level = 0
+overflow-checks = true
+panic = 'unwind'
+rpath = false
+strip = false
+
+[profile.release]
+codegen-units = 1
+debug = false
+debug-assertions = false
+incremental = false
+lto = true
+opt-level = 3
+overflow-checks = false
+panic = "abort"
+rpath = false
+strip = "symbols"
+
+[profile.test]
+codegen-units = 256
+debug = true
+debug-assertions = true
+incremental = true
+lto = false
+opt-level = 0
+overflow-checks = true
+rpath = false
+strip = false

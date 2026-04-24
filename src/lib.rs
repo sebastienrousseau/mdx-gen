@@ -1,9 +1,10 @@
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
 // src/lib.rs
-
 #![doc = include_str!("../README.md")]
 #![doc(
-    html_favicon_url = "https://kura.pro/mdx-gen/images/favicon.ico",
-    html_logo_url = "https://kura.pro/mdx-gen/images/logos/mdx-gen.svg",
+    html_favicon_url = "https://cloudcdn.pro/mdx-gen/v1/favicon.ico",
+    html_logo_url = "https://cloudcdn.pro/mdx-gen/v1/logos/mdx-gen.svg",
     html_root_url = "https://docs.rs/mdx-gen"
 )]
 #![crate_name = "mdx_gen"]
@@ -12,35 +13,54 @@
 /// The `error` module contains error types for Markdown processing.
 pub mod error;
 
-/// The `extensions` module contains custom block extensions for Markdown processing.
+/// The `extensions` module contains custom block and table extensions.
 pub mod extensions;
 
-/// The `markdown` module contains functions for parsing, converting, and rendering Markdown.
+/// Mermaid diagram rendering for fenced `mermaid` code blocks.
+pub mod diagrams;
+
+/// Syntax highlighting adapter for comrak's plugin system.
+#[cfg(feature = "syntax_highlighting")]
+pub mod highlight;
+
+/// YAML frontmatter extraction and parsing.
+pub mod frontmatter;
+
+/// The `markdown` module contains the core processing pipeline.
 pub mod markdown;
 
-// Re-exporting key items for easier access by the library's users.
+// ── Re-exports ──────────────────────────────────────────────────────
 
-/// Represents errors that may occur during Markdown processing.
-///
-/// This includes errors related to syntax, rendering, and custom block handling.
 pub use error::MarkdownError;
 
-/// Applies syntax highlighting to code blocks within the processed Markdown.
+/// Applies syntax highlighting to code (standalone usage).
 ///
 /// # Example
 /// ```
 /// use mdx_gen::apply_syntax_highlighting;
 /// let highlighted = apply_syntax_highlighting("fn main() {}", "rust");
 /// ```
-pub use extensions::apply_syntax_highlighting;
+#[cfg(feature = "syntax_highlighting")]
+pub use highlight::apply_syntax_highlighting;
 
-/// Represents different alignment options for table columns in enhanced Markdown tables.
+/// Generates a CSS stylesheet for a built-in syntect theme so that
+/// callers can render the class-based output produced by the
+/// highlighter and the comrak adapter.
+#[cfg(feature = "syntax_highlighting")]
+pub use highlight::theme_css;
+
+pub use extensions::collect_headings;
 pub use extensions::ColumnAlignment;
-
-/// Represents the type of custom block, such as admonitions or custom embedded content.
+pub use extensions::CustomBlockConfig;
 pub use extensions::CustomBlockType;
+pub use extensions::Heading;
 
-/// Processes a Markdown string and converts it into HTML, applying custom blocks and syntax highlighting.
+/// Script block that hydrates client-side `<pre class="mermaid">`
+/// containers into inline SVG. Embed once per page — typically
+/// before `</body>`.
+pub use diagrams::hydration_script_html;
+
+/// Processes a Markdown string and converts it into HTML.
 ///
 /// # Example
 /// ```
@@ -49,9 +69,11 @@ pub use extensions::CustomBlockType;
 ///
 /// let markdown_input = "# Hello, World!";
 /// let mut comrak_options = Options::default();
-/// comrak_options.extension.table = true;  // Enable Comrak table extension
+/// comrak_options.extension.table = true;
 ///
-/// let options = MarkdownOptions::default().with_comrak_options(comrak_options);  // Chaining method call
+/// let options = MarkdownOptions::default()
+///     .with_custom_blocks(false)
+///     .with_comrak_options(comrak_options);
 ///
 /// let html_output = process_markdown(markdown_input, &options).expect("Failed to process markdown");
 /// assert!(html_output.contains("<h1>Hello, World!</h1>"));
@@ -59,13 +81,39 @@ pub use extensions::CustomBlockType;
 ///
 /// # Errors
 ///
-/// This function will return a `MarkdownError` if the input contains invalid syntax or cannot be parsed.
+/// Returns a `MarkdownError` if options are invalid, input exceeds
+/// the size limit, or rendering fails.
 pub use markdown::process_markdown;
 
-/// Options for configuring how Markdown is processed, including syntax highlighting and custom block support.
-pub use markdown::MarkdownOptions;
+/// Streams processed HTML directly to a `Write` sink.
+///
+/// See [`process_markdown`] for the pipeline semantics; this variant
+/// writes the output through a caller-provided writer instead of
+/// allocating a `String`.
+pub use markdown::process_markdown_to_writer;
 
-/// Re-export comrak's options for convenience when customizing Markdown processing.
+/// Extracts plain-text content from Markdown (strips all formatting).
+///
+/// # Example
+/// ```
+/// use mdx_gen::{process_markdown_to_plain_text, MarkdownOptions};
+/// let text = process_markdown_to_plain_text("# Hello\nWorld", &MarkdownOptions::default()).unwrap();
+/// assert_eq!(text, "Hello World");
+/// ```
+pub use markdown::process_markdown_to_plain_text;
+
+/// Processes Markdown and returns both the rendered HTML and a
+/// document-order list of [`Heading`]s suitable for building a
+/// table of contents.
+pub use markdown::process_markdown_with_toc;
+
+/// Streaming variant of [`process_markdown_with_toc`].
+pub use markdown::process_markdown_with_toc_to_writer;
+
+pub use markdown::MarkdownOptions;
+pub use markdown::SanitizerConfig;
+
+/// Re-export comrak's options for convenience.
 ///
 /// # Usage
 /// ```

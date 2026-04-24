@@ -1,0 +1,9 @@
+# Acknowledged advisories for transitive dependencies we cannot control.
+# See deny.toml for rationale.
+
+[advisories]
+ignore = [
+    # bincode 1.3.3 — unmaintained (not unsound). Transitive dep of
+    # syntect via dump-load for pre-compiled syntax/theme packs.
+    "RUSTSEC-2025-0141",
+]

@@ -43,7 +43,8 @@ mod tests {
                 let mut opts = Options::default();
                 opts.extension.table = true;
                 opts
-            });
+            })
+            .with_unsafe_html(true);
         let result = process_markdown(markdown, &options)
             .expect("Failed to process markdown with custom blocks");
         assert!(result.contains(r#"<div class="alert alert-info" role="alert"><strong>Note:</strong>"#), "Custom block was not processed correctly");
@@ -76,8 +77,15 @@ mod tests {
             "Code block content was not processed correctly"
         );
 
-        // Check that syntax highlighting styles are applied
-        assert!(result.contains("color:#a3be8c;"), "Syntax highlighting style for string was not applied correctly");
+        // Highlighter now emits class-based spans (no inline styles).
+        assert!(
+            result.contains("<span class=\""),
+            "Expected class-based syntax spans in: {result}"
+        );
+        assert!(
+            !result.contains(" style=\""),
+            "Inline style attributes should no longer appear: {result}"
+        );
     }
 
     #[test]
