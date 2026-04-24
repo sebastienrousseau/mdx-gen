@@ -468,4 +468,133 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(result.attempts, 1);
     }
+
+    #[test]
+    fn test_backoff_none_zero_delay() {
+        assert_eq!(BackoffStrategy::None.delay_for_attempt(0), Duration::ZERO);
+        assert_eq!(BackoffStrategy::None.delay_for_attempt(9), Duration::ZERO);
+    }
+
+    #[test]
+    fn test_backoff_linear_grows_and_caps() {
+        let s = BackoffStrategy::Linear {
+            initial: Duration::from_millis(100),
+            increment: Duration::from_millis(50),
+            max: Duration::from_millis(250),
+        };
+        assert_eq!(s.delay_for_attempt(0), Duration::from_millis(100));
+        assert_eq!(s.delay_for_attempt(1), Duration::from_millis(150));
+        assert_eq!(s.delay_for_attempt(2), Duration::from_millis(200));
+        assert_eq!(s.delay_for_attempt(3), Duration::from_millis(250));
+        // Beyond max, should cap.
+        assert_eq!(s.delay_for_attempt(10), Duration::from_millis(250));
+    }
+
+    #[test]
+    fn test_backoff_strategy_default_is_exponential() {
+        match BackoffStrategy::default() {
+            BackoffStrategy::Exponential {
+                multiplier,
+                initial,
+                ..
+            } => {
+                assert!((multiplier - 2.0).abs() < f64::EPSILON);
+                assert_eq!(initial, Duration::from_millis(100));
+            }
+            other => panic!("expected Exponential default, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_max_attempts_clamps_zero_to_one() {
+        let cfg = RetryConfig::new().max_attempts(0);
+        assert_eq!(cfg.max_attempts, 1);
+        let cfg = RetryConfig::new().max_attempts(5);
+        assert_eq!(cfg.max_attempts, 5);
+    }
+
+    #[test]
+    fn test_jitter_builder_toggles_flag() {
+        let cfg = RetryConfig::new().jitter(false);
+        assert!(!cfg.jitter);
+        let cfg = RetryConfig::new().jitter(true);
+        assert!(cfg.jitter);
+    }
+
+    #[test]
+    fn test_with_constant_delay_builder() {
+        let cfg = RetryConfig::with_constant_delay(4, Duration::from_millis(25));
+        assert_eq!(cfg.max_attempts, 4);
+        assert!(!cfg.jitter);
+        assert!(
+            matches!(cfg.backoff, BackoffStrategy::Constant(d) if d == Duration::from_millis(25))
+        );
+    }
+
+    #[test]
+    fn test_with_exponential_backoff_builder() {
+        let cfg = RetryConfig::with_exponential_backoff(
+            5,
+            Duration::from_millis(10),
+            Duration::from_secs(1),
+        );
+        assert_eq!(cfg.max_attempts, 5);
+        assert!(cfg.jitter);
+        match cfg.backoff {
+            BackoffStrategy::Exponential {
+                initial,
+                max,
+                multiplier,
+            } => {
+                assert_eq!(initial, Duration::from_millis(10));
+                assert_eq!(max, Duration::from_secs(1));
+                assert!((multiplier - 2.0).abs() < f64::EPSILON);
+            }
+            other => panic!("expected Exponential, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_retry_result_into_result_and_err_helpers() {
+        let r = retry(
+            RetryConfig::new()
+                .max_attempts(2)
+                .backoff(BackoffStrategy::None),
+            || Err::<(), _>("fail"),
+        );
+        assert!(r.is_err());
+        assert!(!r.is_ok());
+        let inner: Result<(), _> = r.into_result();
+        assert!(inner.is_err());
+    }
+
+    #[test]
+    fn test_retry_with_context_receives_attempt_index() {
+        let attempts = Cell::new(Vec::<usize>::new());
+        let config = RetryConfig::new()
+            .max_attempts(3)
+            .backoff(BackoffStrategy::None);
+        let result = retry_with_context(config, |n| {
+            let mut v = attempts.take();
+            v.push(n);
+            attempts.set(v);
+            if n < 2 { Err("no") } else { Ok("yes") }
+        });
+        assert!(result.is_ok());
+        assert_eq!(attempts.take(), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_retry_applies_jitter_without_crashing() {
+        // A non-zero constant delay combined with jitter exercises
+        // the simple_random + jitter-add branch at least once.
+        let config = RetryConfig {
+            max_attempts: 2,
+            backoff: BackoffStrategy::Constant(Duration::from_nanos(1)),
+            jitter: true,
+        };
+        let result = retry(config, || Err::<(), _>("still bad"));
+        assert!(result.is_err());
+        assert_eq!(result.attempts, 2);
+    }
 }

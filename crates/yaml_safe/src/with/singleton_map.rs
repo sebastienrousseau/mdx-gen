@@ -96,3 +96,44 @@ pub fn apply_to_value(v: &mut Value) -> Result<(), Error> {
     *v = to_singleton_map(std::mem::take(v));
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_singleton_map_passthrough_on_multi_key_mapping() {
+        let mut m = Mapping::new();
+        m.insert(Value::String("a".into()), Value::String("1".into()));
+        m.insert(Value::String("b".into()), Value::String("2".into()));
+        let v = Value::Mapping(m);
+        let out = from_singleton_map(v.clone());
+        // len != 1 → fall through to `other => other`.
+        assert_eq!(out, v);
+    }
+
+    #[test]
+    fn from_singleton_map_passthrough_on_non_mapping() {
+        let v = Value::String("x".into());
+        let out = from_singleton_map(v.clone());
+        assert_eq!(out, v);
+    }
+
+    #[test]
+    fn apply_to_value_wraps_string() {
+        let mut v = Value::String("Variant".into());
+        apply_to_value(&mut v).unwrap();
+        let m = v.as_mapping().expect("wrapped as mapping");
+        assert_eq!(m.len(), 1);
+        let (k, val) = m.iter().next().unwrap();
+        assert_eq!(k, &Value::String("Variant".into()));
+        assert!(val.is_null());
+    }
+
+    #[test]
+    fn apply_to_value_passes_non_string_through() {
+        let mut v = Value::Null;
+        apply_to_value(&mut v).unwrap();
+        assert!(v.is_null());
+    }
+}

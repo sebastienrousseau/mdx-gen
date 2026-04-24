@@ -331,3 +331,202 @@ where
         _ => MaybeTag::NotTag(s),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mapping::Mapping;
+
+    #[test]
+    fn nobang_strips_single_leading_bang() {
+        assert_eq!(nobang("!foo"), "foo");
+        assert_eq!(nobang("foo"), "foo");
+        assert_eq!(nobang(""), "");
+        // A bare "!" is preserved — strip_prefix returns Some("")
+        // which the match treats as "no tag" and returns the
+        // whole string.
+        assert_eq!(nobang("!"), "!");
+    }
+
+    #[test]
+    #[should_panic(expected = "empty YAML tag not allowed")]
+    fn tag_new_empty_panics() {
+        let _ = Tag::new("");
+    }
+
+    #[test]
+    fn tag_eq_ignores_leading_bang() {
+        let a = Tag::new("!foo");
+        let b = Tag::new("foo");
+        assert_eq!(a, b);
+        assert_eq!(a, "foo");
+        assert_eq!(a, "!foo");
+    }
+
+    #[test]
+    fn tag_ord_and_hash() {
+        let a = Tag::new("!a");
+        let b = Tag::new("!b");
+        assert!(a < b);
+        assert_eq!(a.partial_cmp(&b), Some(Ordering::Less));
+
+        use std::collections::hash_map::DefaultHasher;
+        let mut h1 = DefaultHasher::new();
+        let mut h2 = DefaultHasher::new();
+        Tag::new("!x").hash(&mut h1);
+        Tag::new("x").hash(&mut h2);
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn tag_display_and_debug() {
+        let a = Tag::new("!foo");
+        assert_eq!(format!("{a}"), "!foo");
+        assert_eq!(format!("{a:?}"), "!foo");
+    }
+
+    #[test]
+    fn tagged_value_copy_clones_inner() {
+        let tv = TaggedValue {
+            tag: Tag::new("!T"),
+            value: Value::String("x".into()),
+        };
+        let dup = tv.copy();
+        assert_eq!(dup.tag, tv.tag);
+        assert_eq!(dup.value, tv.value);
+    }
+
+    #[test]
+    fn tagged_value_roundtrip_via_yaml() {
+        // YAML literal `!Foo hello` parses into a TaggedValue
+        // with tag "!Foo" and value String("hello"). This
+        // exercises the Deserialize impl and the tag visitor
+        // happy path.
+        let tv: TaggedValue = crate::from_str("!Foo hello\n").unwrap();
+        assert_eq!(tv.tag, Tag::new("!Foo"));
+        assert_eq!(tv.value, Value::String("hello".into()));
+
+        // Serialize back and round-trip a second time.
+        let yaml = crate::to_string(&tv).unwrap();
+        assert!(yaml.contains("Foo"));
+    }
+
+    #[test]
+    fn check_for_tag_variants() {
+        let t = check_for_tag("!Foo");
+        assert!(matches!(t, MaybeTag::Tag(ref s) if s == "!Foo"));
+        let t = check_for_tag("");
+        assert!(matches!(t, MaybeTag::NotTag(ref s) if s.is_empty()));
+        let t = check_for_tag("!");
+        assert!(matches!(t, MaybeTag::NotTag(ref s) if s == "!"));
+        let t = check_for_tag("plain");
+        assert!(matches!(t, MaybeTag::NotTag(ref s) if s == "plain"));
+    }
+
+    #[test]
+    fn variant_access_unit_and_newtype() {
+        use serde::Deserialize;
+
+        #[derive(Debug, PartialEq, Deserialize)]
+        enum E {
+            Unit,
+            Name(String),
+            Point { x: i32, y: i32 },
+        }
+
+        // Build a TaggedValue manually and deserialize it
+        // through the enum path — exercises EnumAccess and
+        // VariantAccess::{unit_variant, newtype_variant_seed}.
+        let tv = TaggedValue {
+            tag: Tag::new("!Unit"),
+            value: Value::Null,
+        };
+        let got: E = E::deserialize(tv).unwrap();
+        assert_eq!(got, E::Unit);
+
+        let tv = TaggedValue {
+            tag: Tag::new("!Name"),
+            value: Value::String("alice".into()),
+        };
+        let got: E = E::deserialize(tv).unwrap();
+        assert_eq!(got, E::Name("alice".into()));
+
+        // Struct variant — exercises struct_variant on Value.
+        let mut m = Mapping::new();
+        m.insert(Value::String("x".into()), Value::Number(1.into()));
+        m.insert(Value::String("y".into()), Value::Number(2.into()));
+        let tv = TaggedValue {
+            tag: Tag::new("!Point"),
+            value: Value::Mapping(m),
+        };
+        let got: E = E::deserialize(tv).unwrap();
+        assert_eq!(got, E::Point { x: 1, y: 2 });
+    }
+
+    #[test]
+    fn variant_access_tuple_variant_via_sequence() {
+        use serde::Deserialize;
+
+        #[derive(Debug, PartialEq, Deserialize)]
+        enum E {
+            Pair(i32, i32),
+        }
+
+        let tv = TaggedValue {
+            tag: Tag::new("!Pair"),
+            value: Value::Sequence(vec![
+                Value::Number(3.into()),
+                Value::Number(4.into()),
+            ]),
+        };
+        let got: E = E::deserialize(tv).unwrap();
+        assert_eq!(got, E::Pair(3, 4));
+    }
+
+    #[test]
+    fn variant_access_tuple_mismatch_returns_error() {
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum E {
+            Pair(i32, i32),
+        }
+
+        // Non-sequence value for a tuple variant must error.
+        let tv = TaggedValue {
+            tag: Tag::new("!Pair"),
+            value: Value::String("oops".into()),
+        };
+        assert!(E::deserialize(tv).is_err());
+    }
+
+    #[test]
+    fn variant_access_struct_mismatch_returns_error() {
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum E {
+            Thing { x: i32 },
+        }
+
+        let tv = TaggedValue {
+            tag: Tag::new("!Thing"),
+            value: Value::String("oops".into()),
+        };
+        assert!(E::deserialize(tv).is_err());
+    }
+
+    #[test]
+    fn deserialize_ignored_any_on_tagged_value() {
+        use serde::de::IgnoredAny;
+        use serde::Deserialize;
+
+        let tv = TaggedValue {
+            tag: Tag::new("!Whatever"),
+            value: Value::String("x".into()),
+        };
+        let _: IgnoredAny = IgnoredAny::deserialize(tv).unwrap();
+    }
+}

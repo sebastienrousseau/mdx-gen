@@ -382,3 +382,60 @@ impl From<f64> for Number {
         Number { n: N::Float(f) }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn eq_negative_integer_pairs() {
+        let a = Number::from(-10i64);
+        let b = Number::from(-10i64);
+        let c = Number::from(-9i64);
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn total_cmp_between_floats() {
+        let a = Number::from(1.5_f64);
+        let b = Number::from(2.5_f64);
+        assert_eq!(a.total_cmp(&b), Ordering::Less);
+        assert_eq!(b.total_cmp(&a), Ordering::Greater);
+        assert_eq!(a.total_cmp(&a), Ordering::Equal);
+    }
+
+    #[test]
+    fn total_cmp_float_with_nan() {
+        let nan = Number::from(f64::NAN);
+        let one = Number::from(1.0_f64);
+        // partial_cmp over NaN/finite is None → fallback to Equal.
+        assert_eq!(nan.total_cmp(&one), Ordering::Equal);
+    }
+
+    #[test]
+    fn unexpected_maps_every_variant() {
+        assert!(matches!(
+            unexpected(&Number::from(3u64)),
+            Unexpected::Unsigned(3)
+        ));
+        assert!(matches!(
+            unexpected(&Number::from(-2i64)),
+            Unexpected::Signed(-2)
+        ));
+        match unexpected(&Number::from(1.5_f64)) {
+            Unexpected::Float(f) => assert_eq!(f, 1.5_f64),
+            other => panic!("expected Float, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn number_visitor_expecting_emits_message() {
+        // Deserialising a non-number triggers the Visitor error
+        // path, which invokes `expecting` to build its message.
+        let bad: Result<Number, _> = crate::from_str("hello");
+        let err = bad.unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("number"), "expected message: {msg}");
+    }
+}

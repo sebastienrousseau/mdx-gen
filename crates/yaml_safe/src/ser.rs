@@ -320,3 +320,273 @@ fn is_compound(v: &Value) -> bool {
         Value::Sequence(s) if !s.is_empty()
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mapping::Mapping;
+    use crate::value::tagged::{Tag, TaggedValue};
+
+    #[test]
+    fn emit_tagged_value_top_level() {
+        let tv = TaggedValue {
+            tag: Tag::new("!T"),
+            value: Value::String("x".into()),
+        };
+        let yaml = to_string(&Value::Tagged(Box::new(tv))).unwrap();
+        assert!(yaml.contains("!T"));
+        assert!(yaml.contains("x"));
+    }
+
+    #[test]
+    fn emit_empty_sequence_and_mapping() {
+        assert_eq!(
+            to_string(&Value::Sequence(Vec::new())).unwrap().trim(),
+            "[]"
+        );
+        assert_eq!(
+            to_string(&Value::Mapping(Mapping::new())).unwrap().trim(),
+            "{}"
+        );
+    }
+
+    #[test]
+    fn emit_string_with_control_chars_uses_double_quotes() {
+        let s = "line1\nline2\tend\0and\"quote\\back";
+        let yaml = to_string(&Value::String(s.to_string())).unwrap();
+        assert!(yaml.starts_with('"'));
+        assert!(yaml.contains("\\n"));
+        assert!(yaml.contains("\\t"));
+        assert!(yaml.contains("\\0"));
+        assert!(yaml.contains("\\\""));
+        assert!(yaml.contains("\\\\"));
+    }
+
+    #[test]
+    fn emit_string_with_unicode_line_separators() {
+        let s = "a\u{2028}b\u{2029}c\u{0085}d\u{00A0}e";
+        let yaml = to_string(&Value::String(s.to_string())).unwrap();
+        assert!(yaml.contains("\\L"));
+        assert!(yaml.contains("\\P"));
+        assert!(yaml.contains("\\N"));
+        assert!(yaml.contains("\\_"));
+    }
+
+    #[test]
+    fn emit_string_with_rare_control_chars_use_hex_escape() {
+        // Characters that fall into the fallback is_control
+        // branch: \x01, \x0B, \x0C, \x07, \x1B are handled by
+        // named escapes, but e.g. \x06 needs \x06 hex form.
+        let s = "\x06";
+        let yaml = to_string(&Value::String(s.to_string())).unwrap();
+        assert!(yaml.contains("\\x06"));
+    }
+
+    #[test]
+    fn emit_string_with_named_control_chars() {
+        // \x07 BEL, \x08 BS, \x0B VT, \x0C FF, \x1B ESC
+        for (raw, escape) in [
+            ('\x07', "\\a"),
+            ('\x08', "\\b"),
+            ('\x0B', "\\v"),
+            ('\x0C', "\\f"),
+            ('\x1B', "\\e"),
+            ('\r', "\\r"),
+        ] {
+            let s = raw.to_string();
+            let yaml = to_string(&Value::String(s)).unwrap();
+            assert!(
+                yaml.contains(escape),
+                "expected {escape} in {yaml:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn emit_empty_string_as_single_quoted() {
+        let yaml = to_string(&Value::String(String::new())).unwrap();
+        assert!(yaml.trim().starts_with("''"));
+    }
+
+    #[test]
+    fn emit_string_with_single_quote_gets_escaped() {
+        // Leading `!` forces quoting but not double-quoting, so
+        // the single-quote escape branch runs.
+        let yaml =
+            to_string(&Value::String("!it's fine".into())).unwrap();
+        assert!(yaml.starts_with('\''));
+        assert!(yaml.contains("it''s"));
+    }
+
+    #[test]
+    fn needs_quoting_detects_special_starts() {
+        // Starts with special chars.
+        for s in [
+            "{x", "}x", "[x", "]x", ",x", "&x", "*x", "!x", "|x", ">x",
+            "%x", "@x", "`x", "'x", "\"x",
+        ] {
+            assert!(needs_quoting(s), "expected {s:?} to need quoting");
+        }
+    }
+
+    #[test]
+    fn needs_quoting_detects_special_substrings_and_prefixes() {
+        assert!(needs_quoting("key: value"));
+        assert!(needs_quoting("a #comment"));
+        assert!(needs_quoting("line\nbreak"));
+        assert!(needs_quoting("- item"));
+        assert!(needs_quoting("? mark"));
+    }
+
+    #[test]
+    fn needs_quoting_detects_reserved_keywords_and_numbers() {
+        for s in [
+            "null", "NULL", "~", "true", "False", ".nan", ".inf",
+            "-.inf",
+        ] {
+            assert!(needs_quoting(s), "{s} should require quoting");
+        }
+        assert!(needs_quoting("42"));
+        assert!(needs_quoting("3.14"));
+    }
+
+    #[test]
+    fn emit_flow_sequence_inside_mapping() {
+        // A mapping whose value is a sequence that gets inlined
+        // via the flow path: force inline=true by nesting inside
+        // a one-element sequence value of a tagged node.
+        let seq = Value::Sequence(vec![
+            Value::Number(1.into()),
+            Value::Number(2.into()),
+        ]);
+        let tv = Value::Tagged(Box::new(TaggedValue {
+            tag: Tag::new("!Flow"),
+            value: seq,
+        }));
+        // Wrap in an outer seq so tagged value serialization
+        // emits inline flow form.
+        let outer = Value::Sequence(vec![tv]);
+        let yaml = to_string(&outer).unwrap();
+        // The inner sequence is emitted either inline or block,
+        // but the tag marker should appear.
+        assert!(yaml.contains("!Flow"));
+    }
+
+    #[test]
+    fn emit_flow_mapping_inside_sequence() {
+        let mut inner = Mapping::new();
+        inner.insert(
+            Value::String("k".into()),
+            Value::String("v".into()),
+        );
+        let outer = Value::Sequence(vec![Value::Tagged(Box::new(
+            TaggedValue {
+                tag: Tag::new("!Map"),
+                value: Value::Mapping(inner),
+            },
+        ))]);
+        let yaml = to_string(&outer).unwrap();
+        assert!(yaml.contains("!Map"));
+        assert!(yaml.contains('k'));
+    }
+
+    #[test]
+    fn emit_nested_sequence_in_sequence() {
+        let inner = Value::Sequence(vec![
+            Value::Number(1.into()),
+            Value::Number(2.into()),
+        ]);
+        let outer = Value::Sequence(vec![inner]);
+        let yaml = to_string(&outer).unwrap();
+        assert!(yaml.contains('-'));
+    }
+
+    #[test]
+    fn to_writer_writes_bytes() {
+        let mut buf = Vec::new();
+        to_writer(&mut buf, &Value::String("hello".into())).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("hello"));
+    }
+
+    #[test]
+    fn emit_flow_sequence_direct() {
+        // The `Value::Tagged` serialize path converts to a
+        // mapping, so the emit_value flow branches aren't
+        // reachable from the public API with the current
+        // Serialize impl. Call the private helpers directly.
+        let seq = vec![
+            Value::Number(1.into()),
+            Value::Number(2.into()),
+            Value::Number(3.into()),
+        ];
+        let mut out = String::new();
+        emit_flow_sequence(&seq, &mut out);
+        assert_eq!(out, "[1, 2, 3]");
+    }
+
+    #[test]
+    fn emit_flow_mapping_direct() {
+        let mut m = Mapping::new();
+        m.insert(Value::String("a".into()), Value::Number(1.into()));
+        m.insert(Value::String("b".into()), Value::Number(2.into()));
+        let mut out = String::new();
+        emit_flow_mapping(&m, &mut out);
+        assert!(out.starts_with('{'));
+        assert!(out.ends_with('}'));
+        assert!(out.contains("a: 1"));
+        assert!(out.contains(", b: 2"));
+    }
+
+    #[test]
+    fn emit_value_with_tagged_branch_direct() {
+        // emit_value is private; call it directly to exercise
+        // the `Value::Tagged` arm (lines 87-90). The public
+        // Serialize for TaggedValue reroutes through a mapping,
+        // so this branch is otherwise dead code on top-level
+        // serialization.
+        let tv = Value::Tagged(Box::new(TaggedValue {
+            tag: Tag::new("!X"),
+            value: Value::String("plain".into()),
+        }));
+        let mut out = String::new();
+        emit_value(&tv, &mut out, 0, false);
+        assert!(out.starts_with("!X "));
+        assert!(out.contains("plain"));
+    }
+
+    #[test]
+    fn emit_value_inline_non_empty_sequence_uses_flow() {
+        // Also private-helper-only path: Value::Sequence with
+        // inline=true and non-empty content triggers
+        // emit_flow_sequence via emit_value.
+        let seq = Value::Sequence(vec![
+            Value::Number(1.into()),
+            Value::Number(2.into()),
+        ]);
+        let mut out = String::new();
+        emit_value(&seq, &mut out, 0, true);
+        assert_eq!(out, "[1, 2]");
+    }
+
+    #[test]
+    fn needs_quoting_empty_string_returns_true() {
+        assert!(needs_quoting(""));
+    }
+
+    #[test]
+    fn to_writer_propagates_io_error() {
+        struct Failing;
+        impl Write for Failing {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("no"))
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let err =
+            to_writer(Failing, &Value::String("x".into())).unwrap_err();
+        assert!(format!("{err}").contains("no"));
+    }
+}

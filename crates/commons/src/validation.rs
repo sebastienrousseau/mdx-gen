@@ -457,4 +457,131 @@ mod tests {
         assert!(v.is_valid());
         assert!(v.finish().is_ok());
     }
+
+    #[test]
+    fn test_validation_error_display_every_variant() {
+        assert_eq!(ValidationError::Empty.to_string(), "Value cannot be empty");
+        assert_eq!(
+            ValidationError::TooShort { min: 3, actual: 1 }.to_string(),
+            "Value too short: minimum 3, got 1"
+        );
+        assert_eq!(
+            ValidationError::TooLong { max: 5, actual: 9 }.to_string(),
+            "Value too long: maximum 5, got 9"
+        );
+        assert_eq!(
+            ValidationError::BelowMin {
+                min: "1".into(),
+                actual: "0".into()
+            }
+            .to_string(),
+            "Value below minimum: min 1, got 0"
+        );
+        assert_eq!(
+            ValidationError::AboveMax {
+                max: "10".into(),
+                actual: "11".into()
+            }
+            .to_string(),
+            "Value above maximum: max 10, got 11"
+        );
+        assert_eq!(
+            ValidationError::InvalidPattern {
+                pattern: "email".into()
+            }
+            .to_string(),
+            "Value doesn't match pattern: email"
+        );
+        assert!(
+            ValidationError::NotInSet {
+                allowed: vec!["a".into(), "b".into()]
+            }
+            .to_string()
+            .starts_with("Value not in allowed set:")
+        );
+        assert_eq!(ValidationError::Custom("x".into()).to_string(), "x");
+    }
+
+    #[test]
+    fn test_validation_error_is_std_error() {
+        let err = ValidationError::Empty;
+        let _: &dyn std::error::Error = &err;
+    }
+
+    #[test]
+    fn test_is_valid_email_extra_edges() {
+        // domain without dot
+        assert!(!is_valid_email("user@localdomain"));
+        // consecutive dots
+        assert!(!is_valid_email("us..er@example.com"));
+        // local part too long (>64)
+        let huge = format!("{}@example.com", "a".repeat(65));
+        assert!(!is_valid_email(&huge));
+        // domain too long (>255)
+        let longdom = format!("user@{}.com", "a".repeat(260));
+        assert!(!is_valid_email(&longdom));
+    }
+
+    #[test]
+    fn test_is_valid_url_ipv6_bracket_host_is_not_accepted_without_dot() {
+        // Bracket host without dot doesn't pass (covers the
+        // bracketed branch).
+        assert!(!is_valid_url("http://[::1]"));
+    }
+
+    #[test]
+    fn test_is_valid_ipv4_and_ipv6_helpers() {
+        assert!(is_valid_ipv4("192.168.1.1"));
+        assert!(!is_valid_ipv4("::1"));
+        assert!(!is_valid_ipv4("not an ip"));
+
+        assert!(is_valid_ipv6("::1"));
+        assert!(is_valid_ipv6("2001:db8::1"));
+        assert!(!is_valid_ipv6("192.168.1.1"));
+    }
+
+    #[test]
+    fn test_is_alphanumeric_helper() {
+        assert!(is_alphanumeric("abc123"));
+        assert!(!is_alphanumeric(""));
+        assert!(!is_alphanumeric("ab c"));
+        assert!(!is_alphanumeric("a-b"));
+    }
+
+    #[test]
+    fn test_validate_in_set_variants() {
+        let allowed = vec![1, 2, 3];
+        assert!(validate_in_set(&2, &allowed).is_ok());
+        let err = validate_in_set(&99, &allowed).unwrap_err();
+        match err {
+            ValidationError::NotInSet { allowed } => {
+                assert_eq!(allowed, vec!["1", "2", "3"]);
+            }
+            other => panic!("expected NotInSet, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_validator_accumulates_errors() {
+        let mut v = Validator::new();
+        v.check("name", || Err(ValidationError::Empty));
+        v.check("age", || {
+            Err(ValidationError::BelowMin {
+                min: "0".into(),
+                actual: "-1".into(),
+            })
+        });
+        assert!(!v.is_valid());
+        assert_eq!(v.errors().len(), 2);
+        let errs = v.finish().unwrap_err();
+        assert_eq!(errs.len(), 2);
+        assert_eq!(errs[0].0, "name");
+        assert_eq!(errs[1].0, "age");
+    }
+
+    #[test]
+    fn test_validator_finish_ok_on_no_errors() {
+        let v = Validator::new();
+        assert!(v.finish().is_ok());
+    }
 }

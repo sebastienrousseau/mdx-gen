@@ -155,4 +155,44 @@ mod tests {
         assert_eq!(format_duration(Duration::from_secs(65)), "1m 5s");
         assert_eq!(format_duration(Duration::from_secs(3665)), "1h 1m");
     }
+
+    #[test]
+    fn test_format_duration_days_branch() {
+        // 2 days + 3 hours
+        let d = Duration::from_secs(2 * 86400 + 3 * 3600);
+        assert_eq!(format_duration(d), "2d 3h");
+    }
+
+    #[test]
+    fn test_unix_timestamp_fns_return_non_zero() {
+        // Can't assert exact values (wall clock), but both
+        // helpers should surface positive values close to each
+        // other. Millis should be at least seconds * 1000.
+        let secs = unix_timestamp();
+        let millis = unix_timestamp_millis();
+        assert!(secs > 0);
+        assert!(millis >= secs.saturating_mul(1000));
+    }
+
+    #[test]
+    fn test_parse_duration_bare_number_as_seconds() {
+        // No suffix → treated as fractional seconds.
+        assert_eq!(parse_duration("2.5").unwrap(), Duration::from_millis(2500));
+        assert_eq!(parse_duration("3").unwrap(), Duration::from_secs(3));
+    }
+
+    #[test]
+    fn test_parse_duration_invalid_suffix_variants() {
+        assert!(parse_duration("xms").is_err());
+        assert!(parse_duration("bs").is_err());
+        assert!(parse_duration("am").is_err());
+        assert!(parse_duration("xh").is_err());
+        assert!(parse_duration("zd").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_fractional_seconds_in_single_chunk() {
+        let d = parse_duration("1.5s").unwrap();
+        assert_eq!(d, Duration::from_millis(1500));
+    }
 }

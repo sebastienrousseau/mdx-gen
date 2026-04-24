@@ -148,4 +148,49 @@ mod tests {
         let common_result = result.with_context("Reading file");
         assert!(common_result.is_err());
     }
+
+    #[test]
+    fn test_builder_helpers_each_variant() {
+        let c = CommonError::config("bad cfg");
+        assert_eq!(c.to_string(), "Configuration error: bad cfg");
+        let p = CommonError::parse("bad parse");
+        assert_eq!(p.to_string(), "Parse error: bad parse");
+        let nf = CommonError::not_found("/tmp/x");
+        assert_eq!(nf.to_string(), "Not found: /tmp/x");
+        let cu = CommonError::custom("anything");
+        assert_eq!(cu.to_string(), "anything");
+    }
+
+    #[test]
+    fn test_is_input_error_covers_parse_variant() {
+        let err = CommonError::parse("bad");
+        assert!(err.is_input_error());
+        let err = CommonError::invalid_input("bad");
+        assert!(err.is_input_error());
+        let err = CommonError::config("bad");
+        assert!(!err.is_input_error());
+    }
+
+    #[test]
+    fn test_is_recoverable_covers_both_variants() {
+        assert!(CommonError::Timeout("slow".into()).is_recoverable());
+        assert!(CommonError::External("api".into()).is_recoverable());
+        assert!(!CommonError::config("x").is_recoverable());
+    }
+
+    #[test]
+    fn test_with_context_preserves_error_text() {
+        let result: Result<(), std::io::Error> = Err(std::io::Error::other("disk"));
+        let err = result.with_context("writing").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("writing"));
+        assert!(msg.contains("disk"));
+    }
+
+    #[test]
+    fn test_io_from_impl_wraps_io_error() {
+        let io = std::io::Error::other("oops");
+        let common: CommonError = io.into();
+        assert_eq!(common.to_string(), "IO error: oops");
+    }
 }

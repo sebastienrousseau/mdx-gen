@@ -130,4 +130,87 @@ mod tests {
         assert_eq!(cache.get(&2), Some(&"two"));
         assert_eq!(cache.get(&3), Some(&"three"));
     }
+
+    #[test]
+    fn test_insert_existing_key_updates_value_and_returns_old() {
+        let mut cache = LruCache::new(3);
+        assert_eq!(cache.insert("k", 1), None);
+        assert_eq!(cache.insert("k", 2), Some(1));
+        assert_eq!(cache.get(&"k"), Some(&2));
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn test_peek_does_not_update_order() {
+        let mut cache = LruCache::new(2);
+        cache.insert(1, "a");
+        cache.insert(2, "b");
+
+        // peek should not promote key 1, so inserting a third
+        // entry evicts 1.
+        assert_eq!(cache.peek(&1), Some(&"a"));
+        cache.insert(3, "c");
+        assert_eq!(cache.peek(&1), None);
+        assert_eq!(cache.peek(&2), Some(&"b"));
+        assert_eq!(cache.peek(&3), Some(&"c"));
+    }
+
+    #[test]
+    fn test_peek_on_missing_key_returns_none() {
+        let cache: LruCache<i32, i32> = LruCache::new(2);
+        assert!(cache.peek(&42).is_none());
+    }
+
+    #[test]
+    fn test_remove_existing_and_missing() {
+        let mut cache = LruCache::new(2);
+        cache.insert(1, "a");
+        cache.insert(2, "b");
+        assert_eq!(cache.remove(&1), Some("a"));
+        assert_eq!(cache.len(), 1);
+        assert!(cache.get(&1).is_none());
+        // Removing a missing key is a no-op that returns None.
+        assert_eq!(cache.remove(&99), None);
+    }
+
+    #[test]
+    fn test_is_empty_and_clear() {
+        let mut cache = LruCache::new(2);
+        assert!(cache.is_empty());
+        cache.insert(1, "a");
+        assert!(!cache.is_empty());
+        cache.clear();
+        assert!(cache.is_empty());
+        assert_eq!(cache.len(), 0);
+        // Ordering vec was also cleared — reinsert works normally.
+        cache.insert(1, "a");
+        cache.insert(2, "b");
+        assert_eq!(cache.len(), 2);
+    }
+
+    #[test]
+    fn test_get_promotes_mru_so_next_eviction_drops_lru() {
+        let mut cache = LruCache::new(2);
+        cache.insert(1, "a");
+        cache.insert(2, "b");
+        // Promote 1 to front.
+        let _ = cache.get(&1);
+        // Inserting 3 evicts the LRU key — now 2.
+        cache.insert(3, "c");
+        assert_eq!(cache.get(&1), Some(&"a"));
+        assert!(cache.get(&2).is_none());
+    }
+
+    #[test]
+    fn test_get_on_missing_key_is_none() {
+        let mut cache: LruCache<i32, i32> = LruCache::new(2);
+        assert!(cache.get(&0).is_none());
+    }
+
+    #[test]
+    fn test_debug_format() {
+        let cache: LruCache<i32, i32> = LruCache::new(2);
+        let s = format!("{cache:?}");
+        assert!(s.contains("LruCache"));
+    }
 }

@@ -341,4 +341,39 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), EnvError::NotSet(_)));
     }
+
+    #[test]
+    fn test_env_error_display_variants() {
+        assert_eq!(
+            EnvError::NotSet("FOO".into()).to_string(),
+            "Environment variable not set: FOO"
+        );
+        assert_eq!(
+            EnvError::Empty("BAR".into()).to_string(),
+            "Environment variable is empty: BAR"
+        );
+        assert_eq!(
+            EnvError::ParseError {
+                var: "PORT".into(),
+                value: "abc".into(),
+                expected: "u16".into(),
+            }
+            .to_string(),
+            "Cannot parse PORT=abc as u16"
+        );
+    }
+
+    #[test]
+    fn test_env_error_is_std_error() {
+        let err = EnvError::NotSet("X".into());
+        let _: &dyn std::error::Error = &err;
+    }
+
+    #[test]
+    fn test_env_config_optional_is_always_valid() {
+        let mut config = EnvConfig::new();
+        let _ = config.optional("COMMONS_ANY_NON_MATCHING", "default");
+        assert!(config.is_valid());
+        assert!(config.validate().is_empty());
+    }
 }

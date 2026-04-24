@@ -326,4 +326,84 @@ mod tests {
         assert_eq!(config.get::<i64>("port"), Some(8080));
         assert_eq!(config.get::<bool>("debug"), Some(true));
     }
+
+    #[test]
+    fn test_new_with_invalid_toml_falls_back_to_empty_table() {
+        // Malformed TOML → parsed becomes an empty table, raw
+        // content preserved verbatim.
+        let config = Config::new("this is = = invalid");
+        assert!(config.get::<String>("this").is_none());
+        assert!(config.raw().contains("invalid"));
+    }
+
+    #[test]
+    fn test_has_key_true_and_false() {
+        let config = Config::new("name = \"x\"\n[srv]\nport = 1\n");
+        assert!(config.has_key("name"));
+        assert!(config.has_key("srv.port"));
+        assert!(!config.has_key("missing"));
+        assert!(!config.has_key("srv.nope"));
+    }
+
+    #[test]
+    fn test_raw_returns_original_content() {
+        let content = "key = 42\n";
+        let config = Config::new(content);
+        assert_eq!(config.raw(), content);
+    }
+
+    #[test]
+    fn test_from_file_reads_toml() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("commons-config-{}.toml", std::process::id()));
+        std::fs::write(&path, "app = \"hi\"\n").unwrap();
+        let config = Config::from_file(&path).unwrap();
+        assert_eq!(config.get::<String>("app"), Some("hi".into()));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_from_file_missing_path_errors() {
+        let err = Config::from_file("/no/such/path/to/file.toml").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("Failed to read config file"));
+    }
+
+    #[test]
+    fn test_parse_reports_parse_error() {
+        // Missing closing quote.
+        let config = Config::new("name = \"unterm");
+        let err: Result<TestConfig, _> = config.parse();
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_from_toml_value_for_f64() {
+        let config = Config::new("ratio = 2.5\n");
+        assert_eq!(config.get::<f64>("ratio"), Some(2.5));
+        // Non-float value returns None.
+        let config = Config::new("ratio = \"x\"\n");
+        assert_eq!(config.get::<f64>("ratio"), None);
+    }
+
+    #[test]
+    fn test_from_toml_value_identity_for_value() {
+        let config = Config::new("n = 1\n");
+        let v: toml::Value = config.get("n").unwrap();
+        assert_eq!(v.as_integer(), Some(1));
+    }
+
+    #[test]
+    fn test_config_clone_preserves_content() {
+        let config = Config::new("a = 1\n");
+        let dup = config.clone();
+        assert_eq!(dup.get::<i64>("a"), Some(1));
+        assert_eq!(dup.raw(), config.raw());
+    }
+
+    #[test]
+    fn test_config_error_display_for_missing_key() {
+        let err = ConfigError::MissingKey("foo".into());
+        assert_eq!(err.to_string(), "Missing required config key: foo");
+    }
 }
