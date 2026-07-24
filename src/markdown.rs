@@ -20,7 +20,9 @@ use crate::extensions::{
     collect_headings, enhance_table_nodes, process_custom_block_nodes,
     CustomBlockConfig, Heading,
 };
-use comrak::options::{Plugins, RenderPlugins};
+use comrak::options::Plugins;
+#[cfg(feature = "syntax_highlighting")]
+use comrak::options::RenderPlugins;
 use comrak::{Arena, Options};
 use log::{debug, info, warn};
 use std::collections::{HashMap, HashSet};
@@ -50,9 +52,10 @@ pub struct MarkdownOptions<'a> {
     /// Allow raw HTML pass-through in Markdown output.
     ///
     /// When `true`, raw HTML in the Markdown source is passed through
-    /// unchanged. When `false`, output is sanitized with ammonia to
-    /// strip dangerous tags while preserving safe structural HTML
-    /// (our generated alert divs, tables, code blocks, etc.).
+    /// unchanged. When `false` (the default), output is sanitized with
+    /// ammonia to strip dangerous tags while preserving safe
+    /// structural HTML (our generated alert divs, tables, code
+    /// blocks, etc.).
     pub allow_unsafe_html: bool,
     /// Configuration for custom block rendering.
     pub custom_block_config: CustomBlockConfig,
@@ -96,7 +99,10 @@ impl<'a> Default for MarkdownOptions<'a> {
             enable_syntax_highlighting: true,
             enable_enhanced_tables: true,
             syntax_theme: None,
-            allow_unsafe_html: true,
+            // Safe by default: raw HTML in untrusted Markdown is
+            // sanitized unless the caller explicitly opts in via
+            // `with_unsafe_html(true)`.
+            allow_unsafe_html: false,
             custom_block_config: CustomBlockConfig::default(),
             max_input_size: DEFAULT_MAX_INPUT_SIZE,
             header_ids: None,
@@ -618,6 +624,13 @@ impl SanitizerConfig {
 }
 
 /// Creates a convenience set of options with all features enabled.
+///
+/// The HTML sanitizer stays **on** (`allow_unsafe_html = false`):
+/// raw HTML in the Markdown source is cleaned with ammonia while
+/// mdx-gen's own generated markup (alert divs, responsive tables,
+/// highlighted code) is preserved. Chain
+/// [`MarkdownOptions::with_unsafe_html`]`(true)` only for trusted
+/// input that needs raw HTML pass-through.
 pub fn default_markdown_options() -> MarkdownOptions<'static> {
     MarkdownOptions::new()
         .with_custom_blocks(true)
@@ -628,7 +641,7 @@ pub fn default_markdown_options() -> MarkdownOptions<'static> {
             opts.extension.table = true;
             opts
         })
-        .with_unsafe_html(true)
+        .with_unsafe_html(false)
 }
 
 // ── Core processing pipeline ────────────────────────────────────────
@@ -896,6 +909,13 @@ static CODE_LANG_CLASSES: LazyLock<HashSet<String>> =
             "markdown",
             "plaintext",
             "text",
+            // Diagram info-strings: with `enable_diagrams` off these
+            // render as ordinary highlighted code blocks and must
+            // keep their `language-*` hook under the safe default.
+            "mermaid",
+            "geojson",
+            "topojson",
+            "stl",
         ]
         .iter()
         .map(|lang| format!("language-{lang}"))
@@ -1151,6 +1171,9 @@ fn main() {
         );
     }
 
+    // Theme-name validation (check #2) only runs when syntect is
+    // compiled in, so this test is feature-gated to match.
+    #[cfg(feature = "syntax_highlighting")]
     #[test]
     fn test_validation_unknown_syntax_theme() {
         let options = MarkdownOptions::new()
@@ -1518,6 +1541,71 @@ fn main() {
             !html.contains("<script>"),
             "Script tags should be stripped"
         );
+    }
+
+    #[test]
+    fn test_default_options_sanitize_raw_html() {
+        // Safe by default: `MarkdownOptions::default()` must NOT
+        // pass raw script through — no opt-out required from the
+        // caller.
+        let markdown = "<script>alert(1)</script>\n\n# Safe";
+        let options = MarkdownOptions::default();
+        assert!(!options.allow_unsafe_html);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            !html.contains("<script>") && !html.contains("alert(1)"),
+            "default options must neutralize raw script: {html}"
+        );
+        assert!(html.contains("<h1>Safe</h1>"));
+    }
+
+    #[test]
+    fn test_default_markdown_options_helper_is_safe() {
+        // The all-features convenience constructor keeps the
+        // sanitizer on too.
+        let markdown = "<script>alert(1)</script>";
+        let options = default_markdown_options();
+        assert!(!options.allow_unsafe_html);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            !html.contains("<script>") && !html.contains("alert(1)"),
+            "default_markdown_options must sanitize: {html}"
+        );
+    }
+
+    #[test]
+    fn test_explicit_unsafe_passes_raw_html_through() {
+        // Opting in via `with_unsafe_html(true)` restores raw
+        // pass-through for trusted input.
+        let markdown = "<script>alert(1)</script>";
+        let options = MarkdownOptions::new()
+            .with_custom_blocks(false)
+            .with_enhanced_tables(false)
+            .with_unsafe_html(true);
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            html.contains("<script>alert(1)</script>"),
+            "explicit unsafe opt-in must pass raw HTML: {html}"
+        );
+    }
+
+    #[test]
+    fn test_custom_blocks_render_under_safe_default() {
+        // mdx-gen's own generated markup (alert divs) must survive
+        // the sanitizer even when the caller never touches the
+        // unsafe knob.
+        let markdown = "<div class=\"warning\">Careful.</div>";
+        let options = MarkdownOptions::default();
+
+        let html = process_markdown(markdown, &options).unwrap();
+        assert!(
+            html.contains("alert alert-warning"),
+            "custom blocks must render under the safe default: {html}"
+        );
+        assert!(html.contains("Careful."));
     }
 
     #[test]
