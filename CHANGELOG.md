@@ -9,6 +9,41 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+## [0.0.5] — 2026-07-03
+
+### Security
+
+- **Raw-HTML pass-through is now OFF by default.**
+  `MarkdownOptions::default()` and `default_markdown_options()` set
+  `allow_unsafe_html = false`, so raw HTML in Markdown input (e.g.
+  `<script>alert(1)</script>`) is sanitized with ammonia unless the
+  caller explicitly opts in via `with_unsafe_html(true)`. Previous
+  releases defaulted to `true`, silently passing attacker-controlled
+  HTML through for callers who never touched the knob — despite the
+  README documenting a safe default. The internal comrak render pass
+  still runs with `render.unsafe = true` (required for mdx-gen's own
+  generated markup — alert divs, responsive-table wrappers), but that
+  pass-through is scoped to generated output by the ammonia
+  allow-list; user-supplied dangerous HTML never survives the safe
+  default. Callers who feed **trusted** Markdown and rely on raw HTML
+  pass-through must now opt in explicitly:
+  `MarkdownOptions::default().with_unsafe_html(true)`.
+
+### Changed
+
+- Sanitizer allow-list: `language-mermaid`, `language-geojson`,
+  `language-topojson`, and `language-stl` classes on `<code>` are now
+  preserved, so diagram-tagged code blocks keep their styling hook
+  under the safe default when `enable_diagrams` is off.
+
+### Fixed
+
+- `unused_imports` warning (`RenderPlugins`) when building with
+  `--no-default-features`.
+- `test_validation_unknown_syntax_theme` now feature-gated on
+  `syntax_highlighting`; it asserted a syntect-only validation check
+  and failed under `--no-default-features`.
+
 ## [0.0.4] — 2026-04-24
 
 First crates.io-shipping release of the 0.0.x line. `0.0.3` was tagged
@@ -267,5 +302,7 @@ utilities into a workspace.
   `criterion`) applied here; six obsoleted by the consolidated CI
   workflow + dropped `toml` dependency on `feat/v0.0.3`.
 
-[Unreleased]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.4...v0.0.5
+[0.0.4]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/sebastienrousseau/mdx-gen/releases/tag/v0.0.3
