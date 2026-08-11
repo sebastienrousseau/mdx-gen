@@ -9,6 +9,12 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+## [0.0.6] — 2026-08-11
+
+### Changed
+
+- Bumped `html-escape` 0.2.14 -> 0.2.15 in the minor-and-patch group.
+
 ## [0.0.5] — 2026-07-03
 
 ### Security
@@ -302,7 +308,8 @@ utilities into a workspace.
   `criterion`) applied here; six obsoleted by the consolidated CI
   workflow + dropped `toml` dependency on `feat/v0.0.3`.
 
-[Unreleased]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/sebastienrousseau/mdx-gen/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/sebastienrousseau/mdx-gen/releases/tag/v0.0.3
