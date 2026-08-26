@@ -31,9 +31,3 @@ jobs:
     with:
       language: rust
       dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || false }}
-    secrets:
-      # The shared pipeline expects `CRATES_TOKEN`; this repo's
-      # long-standing secret is `CARGO_API_TOKEN`. Pass it through
-      # under the name the pipeline reads so no secret rename is
-      # needed on the repo side.
-      CRATES_TOKEN: ${{ secrets.CARGO_API_TOKEN }}
