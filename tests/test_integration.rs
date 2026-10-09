@@ -1,3 +1,5 @@
+//! End-to-end rendering tests for basic Markdown, strikethrough and links.
+
 use mdx_gen::{process_markdown, MarkdownOptions};
 
 #[test]

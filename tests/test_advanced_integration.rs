@@ -1,3 +1,6 @@
+//! Rendering tests that run CommonMark and GFM constructs through
+//! `process_markdown` with every extension turned on.
+
 use comrak::Options;
 use mdx_gen::{process_markdown, MarkdownOptions};
 

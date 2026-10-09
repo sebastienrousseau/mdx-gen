@@ -1,3 +1,5 @@
+//! Construction and `Display` tests for each `MarkdownError` variant.
+
 #[cfg(test)]
 mod tests {
     use mdx_gen::MarkdownError;

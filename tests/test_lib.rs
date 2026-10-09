@@ -1,3 +1,5 @@
+//! Tests for the public `process_markdown` entry point and its options.
+
 #[cfg(test)]
 mod tests {
     use comrak::Options;

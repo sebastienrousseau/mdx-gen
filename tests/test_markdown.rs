@@ -1,3 +1,6 @@
+//! Tests for `MarkdownOptions` defaults and builders, and for
+//! `process_markdown` on tables, code, raw HTML and edge cases.
+
 #[cfg(test)]
 mod tests {
     use comrak::Options;

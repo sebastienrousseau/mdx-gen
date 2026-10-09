@@ -1,3 +1,5 @@
+//! Tests for the custom-block and table helpers in `mdx_gen::extensions`.
+
 #[cfg(test)]
 mod tests {
     use mdx_gen::extensions::{process_custom_blocks, process_tables};
