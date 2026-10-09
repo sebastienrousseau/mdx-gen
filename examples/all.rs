@@ -13,13 +13,10 @@ const EXAMPLES: &[&str] = &[
     "basic",
     "quickstart",
     // Scenarios
-    "blog",
-    "typed",
     "docs",
     "alerts",
     "cms",
     "security",
-    "site",
     // Output channels
     "styling",
     "gallery",
