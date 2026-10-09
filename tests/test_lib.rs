@@ -50,6 +50,8 @@ mod tests {
         assert!(result.contains(r#"<div class="alert alert-info" role="alert"><strong>Note:</strong>"#), "Custom block was not processed correctly");
     }
 
+    // Asserts syntect's class spans, which only exist with the feature.
+    #[cfg(feature = "syntax_highlighting")]
     #[test]
     fn test_process_markdown_with_syntax_highlighting() {
         let markdown = "```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```";

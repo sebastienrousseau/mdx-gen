@@ -142,10 +142,12 @@ path = "examples/security.rs"
 [[example]]
 name = "styling"
 path = "examples/styling.rs"
+required-features = ["syntax_highlighting"]
 
 [[example]]
 name = "gallery"
 path = "examples/gallery.rs"
+required-features = ["syntax_highlighting"]
 
 [[example]]
 name = "streaming"
