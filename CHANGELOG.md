@@ -9,7 +9,7 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
-## [0.0.6] — 2026-08-11
+## [0.0.6] - 2026-10-09
 
 ### Security
 
@@ -30,6 +30,29 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 ### Changed
 
 - Bumped `html-escape` 0.2.14 -> 0.2.15 in the minor-and-patch group.
+- Lockfile: `ammonia` 4.1.4 -> 4.2.1, `log` 0.4.33 -> 0.4.34 and
+  `thiserror` 2.0.20 -> 2.0.21 (Dependabot #49, which proposed
+  `ammonia` 4.2.0; 4.2.1 adds the CSS sanitization fix released on
+  2026-10-03). The declared requirements are unchanged.
+
+### Fixed
+
+- `cargo test --no-default-features` builds and passes: the `styling`
+  and `gallery` examples declare `required-features =
+  ["syntax_highlighting"]`, the two tests that assert syntect's class
+  spans are gated on that feature, and the README (whose examples use
+  it) becomes the crate docs only when the feature is on. The
+  `extensions` module docs no longer link to the feature-gated
+  `highlight` module, so rustdoc builds without it too.
+- `cargo run --example all` no longer tries `blog`, `typed` and
+  `site`, which were removed in 0.0.4, so it exits 0.
+- `make lint` passes: each integration-test crate has a crate-level
+  doc comment, which its `--deny missing_docs` requires.
+
+### Internal
+
+- `deny.toml`: six licence allowances that no dependency uses were
+  removed, so `cargo deny check` no longer warns about them.
 
 ## [0.0.5] — 2026-07-03
 
