@@ -9,11 +9,50 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
-## [0.0.6] — 2026-08-11
+## [0.0.6] - 2026-10-09
+
+### Security
+
+- **comrak 0.55.0 for GHSA-xg9p-p4jc-c46g (high).** With
+  `extension.autolink` on, comrak 0.54 and earlier linked bare email
+  addresses by recursing once per address, so a paragraph of about
+  2,000 of them overflowed a 512 KiB thread stack and aborted the
+  process (a stack overflow cannot be caught as a panic), and a URL
+  followed by many `)` took quadratic time. mdx-gen leaves autolink
+  off by default, but callers that turn it on (html-generator does)
+  passed both paths through. The floor is now `comrak = "0.55"`, and
+  `tests/test_autolink_dos.rs` renders 3,000 bare emails on a 512 KiB
+  thread: it aborts on comrak 0.52 and 0.54 and passes on 0.55.
+  mdx-gen never set comrak's `tagfilter` (deprecated in 0.55, removed
+  in 0.56); raw HTML is still stripped by the ammonia sanitizer unless
+  the caller opts in with `with_unsafe_html(true)`.
 
 ### Changed
 
 - Bumped `html-escape` 0.2.14 -> 0.2.15 in the minor-and-patch group.
+- Lockfile: `ammonia` 4.1.4 -> 4.2.1, `log` 0.4.33 -> 0.4.34 and
+  `thiserror` 2.0.20 -> 2.0.21 (Dependabot #49, which proposed
+  `ammonia` 4.2.0; 4.2.1 adds the CSS sanitization fix released on
+  2026-10-03). The declared requirements are unchanged.
+
+### Fixed
+
+- `cargo test --no-default-features` builds and passes: the `styling`
+  and `gallery` examples declare `required-features =
+  ["syntax_highlighting"]`, the two tests that assert syntect's class
+  spans are gated on that feature, and the README (whose examples use
+  it) becomes the crate docs only when the feature is on. The
+  `extensions` module docs no longer link to the feature-gated
+  `highlight` module, so rustdoc builds without it too.
+- `cargo run --example all` no longer tries `blog`, `typed` and
+  `site`, which were removed in 0.0.4, so it exits 0.
+- `make lint` passes: each integration-test crate has a crate-level
+  doc comment, which its `--deny missing_docs` requires.
+
+### Internal
+
+- `deny.toml`: six licence allowances that no dependency uses were
+  removed, so `cargo deny check` no longer warns about them.
 
 ## [0.0.5] — 2026-07-03
 

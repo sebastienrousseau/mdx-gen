@@ -1,3 +1,6 @@
+//! Tests for `MarkdownOptions` defaults and builders, and for
+//! `process_markdown` on tables, code, raw HTML and edge cases.
+
 #[cfg(test)]
 mod tests {
     use comrak::Options;
@@ -68,6 +71,8 @@ mod tests {
         );
     }
 
+    // Asserts syntect's class spans, which only exist with the feature.
+    #[cfg(feature = "syntax_highlighting")]
     #[test]
     fn test_process_markdown_with_syntax_highlighting() {
         let markdown = "```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```";

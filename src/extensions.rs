@@ -2,7 +2,8 @@
 //!
 //! This module provides utilities for enhancing Markdown processing,
 //! including custom block handling and table formatting.
-//! Syntax highlighting has moved to [`crate::highlight`].
+//! Syntax highlighting has moved to the `highlight` module, which
+//! the default `syntax_highlighting` feature provides.
 
 use crate::error::MarkdownError;
 use comrak::nodes::{NodeHtmlBlock, NodeValue};

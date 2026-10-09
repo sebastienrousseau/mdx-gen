@@ -1,7 +1,15 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 // src/lib.rs
-#![doc = include_str!("../README.md")]
+// The README's examples use the default `syntax_highlighting` feature,
+// so it becomes the crate docs (and its doctests run) only with it.
+#![cfg_attr(feature = "syntax_highlighting", doc = include_str!("../README.md"))]
+#![cfg_attr(
+    not(feature = "syntax_highlighting"),
+    doc = "Markdown to HTML with custom blocks, enhanced tables and \
+           sanitization. The README examples need the default \
+           `syntax_highlighting` feature."
+)]
 #![doc(
     html_favicon_url = "https://cloudcdn.pro/mdx-gen/v1/favicon.ico",
     html_logo_url = "https://cloudcdn.pro/mdx-gen/v1/logos/mdx-gen.svg",

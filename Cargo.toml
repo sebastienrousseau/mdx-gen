@@ -67,7 +67,7 @@ autoexamples = false
 
 [dependencies]
 ammonia = "4.1"
-comrak = { version = "0.54", default-features = false }
+comrak = { version = "0.55", default-features = false }
 html-escape = "0.2"
 log = "0.4"
 regex = "1.12"
@@ -142,10 +142,12 @@ path = "examples/security.rs"
 [[example]]
 name = "styling"
 path = "examples/styling.rs"
+required-features = ["syntax_highlighting"]
 
 [[example]]
 name = "gallery"
 path = "examples/gallery.rs"
+required-features = ["syntax_highlighting"]
 
 [[example]]
 name = "streaming"
