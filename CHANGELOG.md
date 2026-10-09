@@ -11,6 +11,22 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [0.0.6] — 2026-08-11
 
+### Security
+
+- **comrak 0.55.0 for GHSA-xg9p-p4jc-c46g (high).** With
+  `extension.autolink` on, comrak 0.54 and earlier linked bare email
+  addresses by recursing once per address, so a paragraph of about
+  2,000 of them overflowed a 512 KiB thread stack and aborted the
+  process (a stack overflow cannot be caught as a panic), and a URL
+  followed by many `)` took quadratic time. mdx-gen leaves autolink
+  off by default, but callers that turn it on (html-generator does)
+  passed both paths through. The floor is now `comrak = "0.55"`, and
+  `tests/test_autolink_dos.rs` renders 3,000 bare emails on a 512 KiB
+  thread: it aborts on comrak 0.52 and 0.54 and passes on 0.55.
+  mdx-gen never set comrak's `tagfilter` (deprecated in 0.55, removed
+  in 0.56); raw HTML is still stripped by the ammonia sanitizer unless
+  the caller opts in with `with_unsafe_html(true)`.
+
 ### Changed
 
 - Bumped `html-escape` 0.2.14 -> 0.2.15 in the minor-and-patch group.
