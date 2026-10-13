@@ -9,6 +9,14 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+## [0.0.7] - Unreleased
+
+### Changed
+
+- **Breaking: the MSRV is now Rust 1.89.0** (was 1.88.0), one floor
+  shared with the maintainer's other Rust crates. `rust-version` in
+  `Cargo.toml` is the only place mdx-gen states it.
+
 ## [0.0.6] - 2026-10-09
 
 ### Security
