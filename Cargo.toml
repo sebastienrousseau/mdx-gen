@@ -68,7 +68,7 @@ autoexamples = false
 [dependencies]
 ammonia = "4.1"
 comrak = { version = "0.55", default-features = false }
-html-escape = "0.2"
+html-escape = "0.3"
 log = "0.4"
 regex = "1.12"
 syntect = { version = "5.2", optional = true, default-features = false, features = ["default-themes", "default-syntaxes", "html", "regex-fancy"] }
