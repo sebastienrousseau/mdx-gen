@@ -9,6 +9,27 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-11-01
+
+### Security
+
+- **ammonia 4.2.4 or newer** for RUSTSEC-2026-0373 (case-sensitive CSS
+  `url()` matching), RUSTSEC-2021-0157 (incorrect escaping of CSS
+  `url("")` in style attributes), and RUSTSEC-2021-0158 (XSS through SVG
+  `animateMotion`, `animateTransform` and `animateColor`). mdx-gen
+  sanitizes rendered HTML with ammonia, so the requirement floor moves
+  from `4.1` to `4.2.4`, and downstream users cannot resolve an affected
+  version through mdx-gen.
+
+### Changed
+
+- **comrak 0.56.0** (was `0.55`) and **html-escape 0.3.0** (was `0.2`),
+  aligning the Markdown AST engine with `html-generator` and
+  `staticdatagen` so downstream builds compile a single `comrak`
+  version.
+- **Breaking: the MSRV is now Rust 1.89.0** (was 1.88.0), one floor
+  shared with the maintainer's other Rust crates.
+
 ## [0.0.6] - 2026-10-09
 
 ### Security

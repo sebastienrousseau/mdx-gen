@@ -15,9 +15,9 @@ resolver = "2"
 
 [package]
 name = "mdx-gen"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
-rust-version = "1.88.0"
+rust-version = "1.89.0"
 license = "MIT OR Apache-2.0"
 description = """
 A robust Rust library for processing Markdown and converting it to HTML with support for custom blocks, enhanced table formatting, and flexible configuration options.
@@ -66,9 +66,9 @@ autoexamples = false
 # -----------------------------------------------------------------------------
 
 [dependencies]
-ammonia = "4.1"
-comrak = { version = "0.55", default-features = false }
-html-escape = "0.2"
+ammonia = "4.2.4"
+comrak = { version = "0.56", default-features = false }
+html-escape = "0.3"
 log = "0.4"
 regex = "1.12"
 syntect = { version = "5.2", optional = true, default-features = false, features = ["default-themes", "default-syntaxes", "html", "regex-fancy"] }
