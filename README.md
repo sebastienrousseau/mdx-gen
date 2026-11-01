@@ -13,7 +13,7 @@
   <a href="https://crates.io/crates/mdx-gen"><img src="https://img.shields.io/crates/v/mdx-gen.svg?style=for-the-badge&color=fc8d62&logo=rust" alt="Crates.io" /></a>
   <a href="https://docs.rs/mdx-gen"><img src="https://img.shields.io/badge/docs.rs-mdx--gen-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="Docs.rs" /></a>
   <a href="https://codecov.io/gh/sebastienrousseau/mdx-gen"><img src="https://img.shields.io/codecov/c/github/sebastienrousseau/mdx-gen?style=for-the-badge&logo=codecov" alt="Coverage" /></a>
-  <a href="https://lib.rs/crates/mdx-gen"><img src="https://img.shields.io/badge/lib.rs-v0.0.6-orange.svg?style=for-the-badge" alt="lib.rs" /></a>
+  <a href="https://lib.rs/crates/mdx-gen"><img src="https://img.shields.io/badge/lib.rs-v0.0.7-orange.svg?style=for-the-badge" alt="lib.rs" /></a>
 </p>
 
 ---
@@ -28,10 +28,10 @@ Or add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-mdx-gen = "0.0.6"
+mdx-gen = "0.0.7"
 ```
 
-Requires [Rust](https://rustup.rs/) 1.88.0 or later. Works on macOS, Linux, and Windows.
+Requires [Rust](https://rustup.rs/) 1.89.0 or later. Works on macOS, Linux, and Windows.
 
 ---
 
