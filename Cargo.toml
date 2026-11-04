@@ -67,7 +67,7 @@ autoexamples = false
 
 [dependencies]
 ammonia = "4.2.4"
-comrak = { version = "0.56", default-features = false }
+comrak = { version = "0.59", default-features = false }
 html-escape = "0.3"
 log = "0.4"
 regex = "1.12"
