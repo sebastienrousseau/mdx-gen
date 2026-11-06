@@ -9,6 +9,13 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+### Removed
+
+- The vendored `crates/commons/` copy of euxis-commons 0.0.3. It was
+  excluded from the workspace and nothing built, tested or documented
+  it; mdx-gen stopped depending on it in 0.0.6. `crates/yaml_safe/`
+  stays parked.
+
 ## [0.0.7] - 2026-11-01
 
 ### Security

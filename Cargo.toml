@@ -5,12 +5,12 @@
 
 [workspace]
 members = ["."]
-# `crates/commons` and `crates/yaml_safe` are parked on disk as
-# reference material for the upcoming EUXIS replacements; they are
-# deliberately NOT workspace members so `cargo publish` sees a clean
-# single-crate graph. The fuzz/ crate has its own [workspace] table
-# and pulls in libfuzzer-sys, which we don't want in the main build.
-exclude = ["fuzz", "crates/commons", "crates/yaml_safe"]
+# `crates/yaml_safe` is parked on disk as reference material for the
+# upcoming EUXIS replacement; it is deliberately NOT a workspace
+# member so `cargo publish` sees a clean single-crate graph. The fuzz/
+# crate has its own [workspace] table and pulls in libfuzzer-sys,
+# which we don't want in the main build.
+exclude = ["fuzz", "crates/yaml_safe"]
 resolver = "2"
 
 [package]
