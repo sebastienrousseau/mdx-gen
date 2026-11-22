@@ -9,6 +9,20 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+### Security
+
+- **ammonia 4.2.5 or newer**, which fixes a mutation XSS that combined
+  MathML and SVG. mdx-gen sanitizes rendered HTML with ammonia, so the
+  requirement floor moves from `4.2.4` to `4.2.5`.
+- **url 2.5.9** (RUSTSEC-2026-0592, stack overflow in `Url::origin()`
+  on nested `blob:` URLs) and **rustix 1.1.6** (RUSTSEC-2026-0486,
+  unsound xattr functions) in `Cargo.lock`. `url` reaches mdx-gen
+  through ammonia; `rustix` only through dev-dependencies.
+
+### Changed
+
+- `html-escape` 0.3.1 and `log` 0.4.35, from Dependabot.
+
 ### Removed
 
 - The vendored `crates/commons/` copy of euxis-commons 0.0.3. It was
