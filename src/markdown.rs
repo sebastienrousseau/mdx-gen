@@ -1,7 +1,9 @@
 //! Core Markdown processing functionality.
 //!
-//! This module handles the conversion of Markdown content into HTML,
-//! with support for custom blocks, enhanced tables, and syntax highlighting.
+//! This module converts CommonMark + GitHub Flavored Markdown into
+//! HTML, with support for custom blocks, enhanced tables, and syntax
+//! highlighting. It does not implement MDX (JSX in Markdown): JSX
+//! tags are treated as raw HTML and go through the sanitizer.
 //!
 //! ## Processing Pipeline
 //!

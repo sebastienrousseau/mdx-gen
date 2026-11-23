@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------
-# MDX Gen - A robust Rust library for processing Markdown and converting it to HTML
-# with support for custom blocks, enhanced table formatting, and flexible configuration options.
+# MDX Gen - converts CommonMark and GitHub Flavored Markdown to sanitized HTML,
+# with custom blocks, enhanced tables and syntax highlighting. Not an MDX (JSX) compiler.
 # -----------------------------------------------------------------------------
 
 [workspace]
@@ -20,7 +20,7 @@ edition = "2021"
 rust-version = "1.89.0"
 license = "MIT OR Apache-2.0"
 description = """
-A robust Rust library for processing Markdown and converting it to HTML with support for custom blocks, enhanced table formatting, and flexible configuration options.
+Converts CommonMark and GitHub Flavored Markdown to sanitized HTML, with custom blocks, enhanced tables, syntax highlighting and table-of-contents extraction. Not an MDX (JSX-in-Markdown) compiler.
 """
 homepage = "https://mdxgen.com/"
 documentation = "https://mdxgen.com/documentation/index.html"

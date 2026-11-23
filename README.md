@@ -5,7 +5,7 @@
 <h1 align="center">MDX Gen</h1>
 
 <p align="center">
-  <strong>A Rust library for processing Markdown into HTML with custom blocks, enhanced tables, class-based syntax highlighting, a hardened sanitizer, table-of-contents extraction, streaming output, and client-side mermaid diagrams.</strong>
+  <strong>A Rust library that converts CommonMark and GitHub Flavored Markdown into sanitized HTML, with custom blocks, enhanced tables, class-based syntax highlighting, a hardened sanitizer, table-of-contents extraction, streaming output, and client-side mermaid diagrams.</strong>
 </p>
 
 <p align="center">
@@ -46,6 +46,12 @@ Pipeline stages:
 3. **Collect** — headings for table-of-contents callers.
 4. **Render** — AST → HTML, with class-based syntax highlighting.
 5. **Sanitize** — ammonia strips dangerous tags while preserving safe structural markup.
+
+### What mdx-gen does, and what it does not
+
+mdx-gen converts **CommonMark + GitHub Flavored Markdown** (tables, strikethrough, task lists, autolinks, footnotes, math) plus its own custom blocks, table enhancement, table of contents, mermaid diagram containers and sanitizer into HTML.
+
+It does **not** implement the [MDX specification](https://mdxjs.com/): there is no JSX in Markdown, no `import`/`export` statements and no component evaluation. JSX written in a document is treated as raw HTML, so the default sanitizer strips any tag it does not allow. If you need MDX, use [`mdxjs`](https://crates.io/crates/mdxjs) (the Rust port of the MDX compiler) instead. The crate name is historical; it does not signal MDX support.
 
 ---
 

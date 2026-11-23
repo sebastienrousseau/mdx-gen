@@ -22,6 +22,15 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 ### Changed
 
 - `html-escape` 0.3.1 and `log` 0.4.35, from Dependabot.
+- **Scope decision: mdx-gen is a CommonMark + GFM to HTML library,
+  not an MDX compiler** (#30, option A). The README, the crate docs
+  and the Cargo `description` now say so and point to the `mdxjs`
+  crate for JSX-in-Markdown. The name stays; renaming the crate
+  (option C) would strand existing users for no functional gain, and
+  embedding an MDX compiler (option B) would put JavaScript-component
+  evaluation in front of the sanitizer. A test pins the current
+  behaviour: JSX tags are raw HTML and the default sanitizer removes
+  them.
 
 ### Removed
 
