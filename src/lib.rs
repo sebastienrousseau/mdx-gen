@@ -42,6 +42,10 @@ pub mod markdown;
 /// Rendering hooks layered over comrak's HTML formatter.
 mod render;
 
+/// Opt-in in-memory cache of rendered documents.
+#[cfg(feature = "cache")]
+pub mod cache;
+
 // ── Re-exports ──────────────────────────────────────────────────────
 
 pub use error::MarkdownError;
@@ -134,6 +138,10 @@ pub use markdown::process_markdown_with_toc;
 pub use markdown::process_markdown_with_toc_to_writer;
 
 pub use markdown::MarkdownOptions;
+
+/// Caching wrapper around the pipeline (`cache` feature).
+#[cfg(feature = "cache")]
+pub use cache::{CacheStats, CachingProcessor};
 pub use markdown::SanitizerConfig;
 
 /// Re-export comrak's options for convenience.

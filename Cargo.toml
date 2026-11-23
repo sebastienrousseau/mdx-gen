@@ -94,6 +94,10 @@ default = ["syntax_highlighting"]
 # Enable syntax highlighting using syntect
 syntax_highlighting = ["syntect"]
 
+# In-memory LRU cache of rendered documents (`CachingProcessor`).
+# No extra dependencies.
+cache = []
+
 # -----------------------------------------------------------------------------
 # Development Dependencies
 # -----------------------------------------------------------------------------
@@ -107,6 +111,11 @@ criterion = "0.8"
 [[bench]]
 name = "markdown_benchmark"
 harness = false
+
+[[bench]]
+name = "cache_benchmark"
+harness = false
+required-features = ["cache"]
 
 # ── Examples ──────────────────────────────────────────────────────
 #

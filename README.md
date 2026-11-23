@@ -73,6 +73,7 @@ It does **not** implement the [MDX specification](https://mdxjs.com/): there is 
 | **Strict validation** | Nine-check `MarkdownOptions::validate` |
 | **Unicode heading ids** | Anchors keep Cyrillic, Greek, Arabic, CJK, Thai, … letters |
 | **Lazy images** | Opt-in `loading="lazy"` and `decoding="async"` on every `<img>` |
+| **Render cache** | Opt-in `CachingProcessor` for repeated documents (`cache` feature) |
 
 ---
 
@@ -238,6 +239,21 @@ assert!(html.contains(r#"alt="Chart""#));
 
 Off by default. When on, every Markdown image gets `loading="lazy"` (the browser defers off-screen images) and `decoding="async"` (decoding does not block rendering); `src`, `alt` and `title` are unchanged and the default sanitizer keeps both attributes. Raw `<img>` tags written as HTML are left as they are. Resizing, format conversion and `srcset` belong in a build step and are out of scope.
 
+### Caching repeated documents
+
+With the `cache` feature, `CachingProcessor` memoises rendered output for documents it has seen, which pays off when the same content is rendered again (static-site rebuilds, CMS previews, documentation CI):
+
+```rust,ignore
+use mdx_gen::{CachingProcessor, MarkdownOptions};
+
+let processor = CachingProcessor::new(MarkdownOptions::default()); // 1000 entries
+let html = processor.process("# Hello")?;          // renders
+let again = processor.process("# Hello")?;         // served from the cache
+let (html, toc) = processor.process_with_toc("# Hello")?;
+```
+
+The processor owns one `MarkdownOptions`, so the cache key is the content alone; build one processor per option set. Entries are found by a 64-bit hash and then compared byte for byte, so a hash collision costs a re-render, never a wrong page. It is `Send + Sync`: a `std::sync::Mutex` guards the map for lookups and inserts only, and rendering runs outside the lock. The least recently used entry is evicted when the bound (`CachingProcessor::with_capacity`, default 1000 documents) is reached. Hits and misses are logged at `debug` level and counted by `stats()`; `clear()` empties the cache; errors are never cached. Only whole documents are cached: there is no incremental reparse and no on-disk persistence.
+
 ### Sanitizer configuration
 
 ```rust
@@ -318,6 +334,7 @@ Start with `quickstart` or `docs` for a realistic walkthrough; `security` double
 | Flag                  | Default | Description |
 | --------------------- | :-----: | --- |
 | `syntax_highlighting` | ✓       | Enable `syntect`-backed highlighter, `theme_css`, `apply_syntax_highlighting` |
+| `cache`               |         | `CachingProcessor`: in-memory LRU cache of rendered documents, no extra dependencies |
 
 Minimal build: `cargo build --no-default-features`.
 

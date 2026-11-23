@@ -11,6 +11,23 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ### Added
 
+- **`CachingProcessor`, an opt-in render cache** (#31, `cache`
+  feature, off by default, no new dependencies). It owns one
+  `MarkdownOptions` and memoises `process` / `process_with_toc`
+  output per document: lookup by a 64-bit hash, then a byte-for-byte
+  content check, so a collision re-renders instead of returning the
+  wrong page. Bounded LRU, `DEFAULT_CAPACITY` 1000 documents
+  (`with_capacity` to change it, `0` to disable); hits and misses
+  logged at `debug` and counted by `stats()`; `clear()` resets;
+  errors are not cached. `Send + Sync`: a `std::sync::Mutex` covers
+  lookup and insert only, rendering runs outside it. The issue
+  suggested `lru`, `ahash` and `parking_lot`; the standard library
+  covers a whole-document cache at this size, so mdx-gen takes no new
+  dependency for it. `cargo bench --features cache --bench
+  cache_benchmark` compares cached and uncached renders of the
+  README: 19.9 ms uncached against 14.3 µs cached (criterion means,
+  Apple A18 Pro under heavy shared load). `process_markdown` and
+  friends are unchanged.
 - **Heading ids for non-Latin scripts, audited** (#34). Tests now pin
   `Heading::{level, text, id}` and the rendered `id="…"` for headings
   in Latin (with diacritics), Cyrillic, Greek, Arabic, Japanese
