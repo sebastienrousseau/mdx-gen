@@ -6,8 +6,10 @@
 #![cfg_attr(feature = "syntax_highlighting", doc = include_str!("../README.md"))]
 #![cfg_attr(
     not(feature = "syntax_highlighting"),
-    doc = "Markdown to HTML with custom blocks, enhanced tables and \
-           sanitization. The README examples need the default \
+    doc = "CommonMark and GitHub Flavored Markdown to sanitized HTML, \
+           with custom blocks and enhanced tables. mdx-gen does not \
+           implement MDX (JSX in Markdown); use the `mdxjs` crate for \
+           that. The README examples need the default \
            `syntax_highlighting` feature."
 )]
 #![doc(
@@ -36,6 +38,14 @@ pub mod validation;
 
 /// The `markdown` module contains the core processing pipeline.
 pub mod markdown;
+
+/// Rendering hooks layered over comrak's HTML formatter.
+mod render;
+
+// Opt-in in-memory cache of rendered documents; documented by its
+// own `//!` header so intra-doc links resolve in the module's scope.
+#[cfg(feature = "cache")]
+pub mod cache;
 
 // ── Re-exports ──────────────────────────────────────────────────────
 
@@ -129,6 +139,10 @@ pub use markdown::process_markdown_with_toc;
 pub use markdown::process_markdown_with_toc_to_writer;
 
 pub use markdown::MarkdownOptions;
+
+/// Caching wrapper around the pipeline (`cache` feature).
+#[cfg(feature = "cache")]
+pub use cache::{CacheStats, CachingProcessor};
 pub use markdown::SanitizerConfig;
 
 /// Re-export comrak's options for convenience.

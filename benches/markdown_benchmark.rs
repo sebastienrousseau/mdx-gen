@@ -9,6 +9,40 @@ use criterion::{
 };
 use mdx_gen::{process_markdown, MarkdownOptions};
 use std::hint::black_box;
+use std::time::Duration;
+
+/// One section of the synthetic document used by
+/// [`large_document_benchmark`]. It mixes the constructs the
+/// pipeline treats specially (headings, a table, a fenced code block,
+/// a custom block, inline markup, a link and an image) so every
+/// stage is exercised in proportion.
+fn synthetic_section(i: usize) -> String {
+    format!(
+        "## Section {i}: pipeline notes\n\n\
+         Paragraph {i} with **bold**, *italic*, `inline code` and a \
+         [link](https://example.com/{i}). The renderer walks the \
+         AST once, then the sanitizer cleans the result.\n\n\
+         - first item {i}\n- second item with `code`\n- third item\n\n\
+         | Name | Value | Notes |\n|:-----|:-----:|------:|\n\
+         | a{i} | 1 | left |\n| b{i} | 2 | right |\n\n\
+         ```rust\nfn section_{i}() -> usize {{\n    let v = vec![1, 2, 3];\n    v.iter().sum()\n}}\n```\n\n\
+         <div class=\"note\">Note for section {i}.</div>\n\n\
+         ![diagram {i}](https://example.com/img/{i}.png \"Figure {i}\")\n\n"
+    )
+}
+
+/// Builds a document of at least `target` bytes from
+/// [`synthetic_section`]s, so the 1 MiB case stays inside the
+/// default `max_input_size` it is meant to approach.
+fn synthetic_document(target: usize) -> String {
+    let mut doc = String::from("# Large document benchmark\n\n");
+    let mut i = 0;
+    while doc.len() < target {
+        doc.push_str(&synthetic_section(i));
+        i += 1;
+    }
+    doc
+}
 
 /// Create a valid MarkdownOptions configuration
 fn create_valid_options(
@@ -103,5 +137,42 @@ Check out [our website](https://example.com) for more information.
     group.finish();
 }
 
-criterion_group!(benches, markdown_benchmark);
+/// Parameterised large-input benchmark (issue #29): 10 KB, 100 KB,
+/// 500 KB and just under the 1 MiB default input cap, rendered with
+/// the default (all features on, sanitizer on) options.
+fn large_document_benchmark(c: &mut Criterion) {
+    let sizes: [(&str, usize); 4] = [
+        ("10KB", 10 * 1024),
+        ("100KB", 100 * 1024),
+        ("500KB", 500 * 1024),
+        ("1MiB", 1_040_000),
+    ];
+    let options = MarkdownOptions::default();
+
+    let mut group = c.benchmark_group("Large documents");
+    group.sample_size(10);
+    group.measurement_time(Duration::from_secs(10));
+
+    for (label, target) in sizes {
+        let doc = synthetic_document(target);
+        group.throughput(Throughput::Bytes(doc.len() as u64));
+        group.bench_with_input(
+            BenchmarkId::new("default", label),
+            &doc,
+            |b, doc| {
+                b.iter(|| {
+                    process_markdown(
+                        black_box(doc),
+                        black_box(&options),
+                    )
+                    .expect("synthetic document renders")
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+criterion_group!(benches, markdown_benchmark, large_document_benchmark);
 criterion_main!(benches);

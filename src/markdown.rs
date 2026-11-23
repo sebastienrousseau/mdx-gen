@@ -1,7 +1,9 @@
 //! Core Markdown processing functionality.
 //!
-//! This module handles the conversion of Markdown content into HTML,
-//! with support for custom blocks, enhanced tables, and syntax highlighting.
+//! This module converts CommonMark + GitHub Flavored Markdown into
+//! HTML, with support for custom blocks, enhanced tables, and syntax
+//! highlighting. It does not implement MDX (JSX in Markdown): JSX
+//! tags are treated as raw HTML and go through the sanitizer.
 //!
 //! ## Processing Pipeline
 //!
@@ -17,9 +19,10 @@
 
 use crate::error::MarkdownError;
 use crate::extensions::{
-    collect_headings, enhance_table_nodes, process_custom_block_nodes,
-    CustomBlockConfig, Heading,
+    collect_headings, enhance_table_nodes_with,
+    process_custom_block_nodes, CustomBlockConfig, Heading,
 };
+use crate::render::{render_html, RenderFlags};
 use comrak::options::Plugins;
 #[cfg(feature = "syntax_highlighting")]
 use comrak::options::RenderPlugins;
@@ -37,9 +40,42 @@ use crate::highlight::SyntectAdapter;
 pub const DEFAULT_MAX_INPUT_SIZE: usize = 1_048_576;
 
 /// Options for configuring Markdown processing behavior.
+///
+/// With the `serde` feature, the type implements `Serialize` and
+/// `Deserialize` with kebab-case keys (`enable-lazy-images`). Every
+/// key is optional and falls back to [`MarkdownOptions::default`];
+/// unknown keys are rejected. `comrak_options` is not part of the
+/// serialised form: a deserialised value starts from the default
+/// comrak options (tables on), and comrak extensions are set in code
+/// with [`MarkdownOptions::with_comrak_options`].
+///
+/// ```
+/// # #[cfg(feature = "serde")] {
+/// use mdx_gen::MarkdownOptions;
+///
+/// let options: MarkdownOptions = toml::from_str(r#"
+///     enable-lazy-images = true
+///     header-ids = "user-content-"
+///
+///     [sanitizer-config]
+///     extra-tags = ["mark"]
+/// "#).unwrap();
+/// assert!(options.enable_lazy_images);
+/// assert!(options.enable_custom_blocks); // default kept
+/// # }
+/// ```
 #[derive(Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(
+    feature = "serde",
+    serde(default, rename_all = "kebab-case", deny_unknown_fields)
+)]
 pub struct MarkdownOptions<'a> {
     /// Options for the underlying Comrak Markdown parser.
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub comrak_options: Options<'a>,
     /// Enable or disable processing of custom blocks.
     pub enable_custom_blocks: bool,
@@ -83,6 +119,28 @@ pub struct MarkdownOptions<'a> {
     /// blocks continue to see syntax-highlighted source. Opt in via
     /// [`MarkdownOptions::with_diagrams`].
     pub enable_diagrams: bool,
+    /// Highlight the code blocks of large documents on several
+    /// threads before rendering (on by default).
+    ///
+    /// Only documents with at least
+    /// `8 x worker threads` distinct code blocks are split, using up
+    /// to `min(available cores, 8)` scoped threads that end before
+    /// the call returns; smaller documents are highlighted on the
+    /// calling thread. The output is identical either way. Turn it
+    /// off when the caller already renders many documents in
+    /// parallel and does not want extra threads. Has no effect when
+    /// syntax highlighting is off or the `syntax_highlighting`
+    /// feature is disabled.
+    pub parallel_highlighting: bool,
+    /// Add `loading="lazy"` and `decoding="async"` to every image
+    /// rendered from Markdown (`![alt](src)`). Off by default.
+    ///
+    /// Browsers then defer off-screen images and decode them off the
+    /// main thread. `src`, `alt` and `title` are unchanged, and the
+    /// default sanitizer allows both attributes on `<img>`. Raw
+    /// `<img>` tags written as HTML in the source are left as they
+    /// are.
+    pub enable_lazy_images: bool,
 }
 
 impl<'a> Default for MarkdownOptions<'a> {
@@ -108,6 +166,8 @@ impl<'a> Default for MarkdownOptions<'a> {
             header_ids: None,
             sanitizer_config: None,
             enable_diagrams: false,
+            parallel_highlighting: true,
+            enable_lazy_images: false,
         }
     }
 }
@@ -207,6 +267,20 @@ impl<'a> MarkdownOptions<'a> {
     /// contract.
     pub fn with_diagrams(mut self, enable: bool) -> Self {
         self.enable_diagrams = enable;
+        self
+    }
+
+    /// Enables or disables multi-threaded highlighting of large
+    /// documents. See [`MarkdownOptions::parallel_highlighting`].
+    pub fn with_parallel_highlighting(mut self, enable: bool) -> Self {
+        self.parallel_highlighting = enable;
+        self
+    }
+
+    /// Enables or disables `loading="lazy"` / `decoding="async"` on
+    /// images. See [`MarkdownOptions::enable_lazy_images`].
+    pub fn with_lazy_images(mut self, enable: bool) -> Self {
+        self.enable_lazy_images = enable;
         self
     }
 
@@ -552,6 +626,8 @@ impl fmt::Debug for MarkdownOptions<'_> {
             .field("header_ids", &self.header_ids)
             .field("sanitizer_config", &self.sanitizer_config)
             .field("enable_diagrams", &self.enable_diagrams)
+            .field("parallel_highlighting", &self.parallel_highlighting)
+            .field("enable_lazy_images", &self.enable_lazy_images)
             .finish()
     }
 }
@@ -564,6 +640,14 @@ impl fmt::Debug for MarkdownOptions<'_> {
 /// defaults that ship with `mdx-gen`. Wire an instance into
 /// [`MarkdownOptions::with_sanitizer_config`].
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(
+    feature = "serde",
+    serde(default, rename_all = "kebab-case", deny_unknown_fields)
+)]
 pub struct SanitizerConfig {
     /// Additional tags to allow (beyond the defaults).
     pub extra_tags: Vec<String>,
@@ -777,7 +861,47 @@ fn pipeline<W: Write>(
     info!("Starting markdown processing");
     debug!("Markdown options: {:?}", options);
 
-    // ── 0. Resource limits ──────────────────────────────────────
+    // ── 0-1. Resource limits and option validation ──────────────
+    check_input(content, options)?;
+
+    // ── 2. Build comrak options ─────────────────────────────────
+    let comrak_opts = render_comrak_options(options);
+    let flags = RenderFlags {
+        lazy_images: options.enable_lazy_images,
+    };
+
+    // ── 3. Parse → AST ─────────────────────────────────────────
+    let arena = Arena::new();
+    let root = comrak::parse_document(&arena, content, &comrak_opts);
+
+    // ── 4. AST transforms ───────────────────────────────────────
+    transform_ast(root, &arena, options, &comrak_opts, flags, toc_out);
+
+    // ── 5. Render to HTML ───────────────────────────────────────
+    let html = render_document(root, options, &comrak_opts, flags)?;
+
+    // ── 6. Sanitize and emit ────────────────────────────────────
+    if options.allow_unsafe_html {
+        writer.write_all(html.as_bytes())?;
+    } else {
+        debug!("Sanitizing HTML output");
+        sanitize_html_to_writer(
+            &html,
+            writer,
+            options.sanitizer_config.as_ref(),
+        )?;
+    }
+
+    info!("Markdown processing completed successfully");
+    Ok(())
+}
+
+/// Rejects input over `max_input_size` and options that fail
+/// [`MarkdownOptions::validate`].
+fn check_input(
+    content: &str,
+    options: &MarkdownOptions,
+) -> Result<(), MarkdownError> {
     if options.max_input_size > 0
         && content.len() > options.max_input_size
     {
@@ -786,31 +910,39 @@ fn pipeline<W: Write>(
             limit: options.max_input_size,
         });
     }
-
-    // ── 1. Validate options ─────────────────────────────────────
     if let Err(errors) = options.validate() {
         for (field, err) in &errors {
             warn!("Invalid MarkdownOptions.{field}: {err}");
         }
         return Err(MarkdownError::from(errors));
     }
+    Ok(())
+}
 
-    // ── 2. Build comrak options ─────────────────────────────────
+/// The comrak options the pipeline renders with: the caller's, with
+/// raw HTML always on (sanitizing happens afterwards when the caller
+/// wants safety) and `header_ids` wired into comrak's extension.
+fn render_comrak_options<'a>(
+    options: &MarkdownOptions<'a>,
+) -> Options<'a> {
     let mut comrak_opts = options.comrak_options.clone();
-    // Always enable unsafe for internal rendering — we sanitize
-    // at the end if the caller wants safety.
     comrak_opts.render.r#unsafe = true;
-
-    // Wire header_ids into comrak's extension
     if let Some(ref prefix) = options.header_ids {
         comrak_opts.extension.header_id_prefix = Some(prefix.clone());
     }
+    comrak_opts
+}
 
-    // ── 3. Parse → AST ─────────────────────────────────────────
-    let arena = Arena::new();
-    let root = comrak::parse_document(&arena, content, &comrak_opts);
-
-    // ── 4. AST transforms ───────────────────────────────────────
+/// Runs the enabled AST transforms in pipeline order and fills
+/// `toc_out` when requested.
+fn transform_ast<'a>(
+    root: comrak::nodes::Node<'a>,
+    arena: &'a Arena<'a>,
+    options: &MarkdownOptions,
+    comrak_opts: &Options,
+    flags: RenderFlags,
+    toc_out: Option<&mut Vec<Heading>>,
+) {
     if options.enable_custom_blocks {
         debug!("Processing custom blocks at AST level");
         process_custom_block_nodes(root, &options.custom_block_config);
@@ -829,52 +961,63 @@ fn pipeline<W: Write>(
     }
     if options.enable_enhanced_tables {
         debug!("Enhancing tables at AST level");
-        enhance_table_nodes(root, &arena, &comrak_opts);
+        enhance_table_nodes_with(root, arena, comrak_opts, flags);
     }
+}
 
-    // ── 5. Render to HTML ───────────────────────────────────────
+/// Renders the transformed AST to HTML, highlighting code blocks
+/// when enabled.
+fn render_document<'a>(
+    root: comrak::nodes::Node<'a>,
+    options: &MarkdownOptions,
+    comrak_opts: &Options,
+    flags: RenderFlags,
+) -> Result<String, MarkdownError> {
     debug!("Rendering AST to HTML");
 
     #[cfg(feature = "syntax_highlighting")]
-    let adapter;
+    let adapter = highlight_adapter(root, options);
     #[cfg(feature = "syntax_highlighting")]
-    let plugins = if options.enable_syntax_highlighting {
-        adapter = SyntectAdapter::new(options.syntax_theme.as_deref());
-        Plugins {
-            render: RenderPlugins {
-                codefence_syntax_highlighter: Some(&adapter),
-                ..Default::default()
-            },
-        }
-    } else {
-        Plugins::default()
+    let plugins = Plugins {
+        render: RenderPlugins {
+            codefence_syntax_highlighter: adapter.as_ref().map(|a| {
+                a as &dyn comrak::adapters::SyntaxHighlighterAdapter
+            }),
+            ..Default::default()
+        },
     };
     #[cfg(not(feature = "syntax_highlighting"))]
-    let plugins = Plugins::default();
+    let plugins = {
+        let _ = options;
+        Plugins::default()
+    };
 
     let mut html = String::new();
-    comrak::format_html_with_plugins(
-        root,
-        &comrak_opts,
-        &mut html,
-        &plugins,
-    )
-    .map_err(|e| MarkdownError::RenderError(e.to_string()))?;
+    render_html(root, comrak_opts, &mut html, &plugins, flags)
+        .map_err(|e| MarkdownError::RenderError(e.to_string()))?;
+    Ok(html)
+}
 
-    // ── 6. Sanitize and emit ────────────────────────────────────
-    if options.allow_unsafe_html {
-        writer.write_all(html.as_bytes())?;
-    } else {
-        debug!("Sanitizing HTML output");
-        sanitize_html_to_writer(
-            &html,
-            writer,
-            options.sanitizer_config.as_ref(),
-        )?;
+/// The syntect adapter for this render, with large documents'
+/// blocks pre-highlighted in parallel, or `None` when highlighting
+/// is off.
+#[cfg(feature = "syntax_highlighting")]
+fn highlight_adapter<'a>(
+    root: comrak::nodes::Node<'a>,
+    options: &MarkdownOptions,
+) -> Option<SyntectAdapter> {
+    if !options.enable_syntax_highlighting {
+        return None;
     }
-
-    info!("Markdown processing completed successfully");
-    Ok(())
+    let prepared = if options.parallel_highlighting {
+        crate::highlight::prehighlight(root)
+    } else {
+        crate::highlight::Prepared::new()
+    };
+    Some(
+        SyntectAdapter::new(options.syntax_theme.as_deref())
+            .with_prepared(prepared),
+    )
 }
 
 // ── HTML sanitization ───────────────────────────────────────────────
@@ -976,6 +1119,9 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
         .add_tag_attributes("h5", &["id"])
         .add_tag_attributes("h6", &["id"])
         .add_tag_attributes("a", &["id"])
+        // `with_lazy_images` hints; both take fixed keyword values
+        // and cannot carry script or URLs.
+        .add_tag_attributes("img", &["loading", "decoding"])
         .allowed_classes(allowed_classes)
         // Syntect's class-based highlighter emits open-ended class
         // names on <span> (one per grammar scope). Whitelisting them

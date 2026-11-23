@@ -144,4 +144,18 @@ mod tests {
             "Enhanced tables should be disabled"
         );
     }
+
+    /// mdx-gen is not an MDX compiler (issue #30): JSX components and
+    /// MDX `import` lines are not evaluated. The tags are raw HTML, so
+    /// the default sanitizer drops them and keeps their text.
+    #[test]
+    fn test_jsx_is_not_evaluated() {
+        let md = "import { Chart } from './chart'\n\n\
+                  <Chart data={[1, 2]}>caption</Chart>\n";
+        let html = process_markdown(md, &MarkdownOptions::default())
+            .expect("renders");
+        assert!(!html.to_lowercase().contains("<chart"), "{html}");
+        assert!(html.contains("import { Chart } from"), "{html}");
+        assert!(html.contains("caption"), "{html}");
+    }
 }

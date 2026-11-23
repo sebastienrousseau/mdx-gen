@@ -7,7 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 "Breaking changes" section before upgrading.
 
-## [Unreleased]
+## [0.0.8] - 2026-11-23
+
+### Added
+
+- **Config-file support** (#33, `serde` feature, off by default):
+  `Serialize` and `Deserialize` on `MarkdownOptions`,
+  `SanitizerConfig`, `CustomBlockConfig`, `CustomBlockType` and
+  `ColumnAlignment`. Keys are kebab-case (`enable-lazy-images`), every
+  key is optional and falls back to the default, and unknown keys are
+  errors. `comrak_options` is left out of the serde surface (comrak's
+  `Options` is a third-party type that holds callbacks): a
+  deserialized value starts from mdx-gen's default comrak options,
+  and extensions are set in code. mdx-gen takes no format crate;
+  tests load TOML (`toml`) and JSON (`serde_json`), both
+  dev-dependencies only. New example: `config_file`.
+- **`CachingProcessor`, an opt-in render cache** (#31, `cache`
+  feature, off by default, no new dependencies). It owns one
+  `MarkdownOptions` and memoises `process` / `process_with_toc`
+  output per document: lookup by a 64-bit hash, then a byte-for-byte
+  content check, so a collision re-renders instead of returning the
+  wrong page. Bounded LRU, `DEFAULT_CAPACITY` 1000 documents
+  (`with_capacity` to change it, `0` to disable); hits and misses
+  logged at `debug` and counted by `stats()`; `clear()` resets;
+  errors are not cached. `Send + Sync`: a `std::sync::Mutex` covers
+  lookup and insert only, rendering runs outside it. The issue
+  suggested `lru`, `ahash` and `parking_lot`; the standard library
+  covers a whole-document cache at this size, so mdx-gen takes no new
+  dependency for it. `cargo bench --features cache --bench
+  cache_benchmark` compares cached and uncached renders of the
+  README: 19.9 ms uncached against 14.3 µs cached (criterion means,
+  Apple A18 Pro under heavy shared load). `process_markdown` and
+  friends are unchanged.
+- **Heading ids for non-Latin scripts, audited** (#34). Tests now pin
+  `Heading::{level, text, id}` and the rendered `id="…"` for headings
+  in Latin (with diacritics), Cyrillic, Greek, Arabic, Japanese
+  (hiragana and kanji), Chinese, Korean and Thai, plus prefixes,
+  de-duplication of repeated CJK headings and mixed-script headings.
+  **Decision: keep comrak's anchorizer** rather than add a pluggable
+  slugifier. The audit showed it is already Unicode-aware (it keeps
+  letters, marks and digits in every script and matches GitHub's
+  anchors), so none of the feared empty or colliding ids appear for
+  real text. The one gap, shared with GitHub, is a heading with no
+  letters at all (emoji or punctuation only), whose id is empty; the
+  README's new "Heading IDs for non-Latin content" section documents
+  it.
+- **Lazy-loading images** (#32): `MarkdownOptions::with_lazy_images(true)`
+  (field `enable_lazy_images`, default `false`) adds
+  `loading="lazy"` and `decoding="async"` to every image rendered
+  from Markdown, including images inside enhanced tables and figure
+  captions. The attributes are written by an `Image` render hook on
+  comrak's formatter, so `src`, `alt` and `title` keep comrak's
+  escaping. The default sanitizer now allows `loading` and
+  `decoding` on `<img>` (ammonia's defaults strip them).
 
 ### Security
 
@@ -19,9 +71,52 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
   unsound xattr functions) in `Cargo.lock`. `url` reaches mdx-gen
   through ammonia; `rustix` only through dev-dependencies.
 
+### Performance
+
+- **Large documents render 38-47% faster** (#29). A stage profile of
+  the 100 KB benchmark document (instructions retired over five
+  renders) put syntect highlighting at about 81% of the work and
+  ammonia sanitizing at about 30% of the total; comrak parsing was
+  under 4%. Code blocks are independent, so documents with at least
+  8 distinct blocks per worker now highlight them on up to
+  `min(cores, 8)` scoped threads before the render; output is
+  byte-identical, and smaller documents never start a thread.
+  `MarkdownOptions::with_parallel_highlighting(false)` opts out.
+  Median of six interleaved runs (each the fastest of several
+  renders), `main` against this release, on an Apple A18 Pro that
+  other jobs kept at a load average of 150-180 throughout, so the
+  absolute times are inflated and noisy:
+
+  | Document | main | 0.0.8 | Change |
+  | :--- | ---: | ---: | ---: |
+  | 10 KB | 6.92 ms | 7.26 ms | +4.9% (within noise; fastest runs 6.60 vs 6.46 ms) |
+  | 100 KB | 83.5 ms | 49.0 ms | -41% |
+  | 500 KB | 505 ms | 314 ms | -38% |
+  | 1 MiB | 1246 ms | 661 ms | -47% |
+
+  The benchmark group is `cargo bench --bench markdown_benchmark --
+  "Large documents"`. Memory: the prepared highlights for a document
+  are held until its render finishes, one extra copy of each code
+  block's highlighted HTML.
+
 ### Changed
 
+- **Breaking for struct literals:** `MarkdownOptions` has two new
+  public fields, `parallel_highlighting` (default `true`) and
+  `enable_lazy_images` (default `false`). Code that builds it with
+  `MarkdownOptions::default()` or `new()` and the builders is
+  unaffected; a struct literal that lists every field needs
+  `..Default::default()`.
 - `html-escape` 0.3.1 and `log` 0.4.35, from Dependabot.
+- **Scope decision: mdx-gen is a CommonMark + GFM to HTML library,
+  not an MDX compiler** (#30, option A). The README, the crate docs
+  and the Cargo `description` now say so and point to the `mdxjs`
+  crate for JSX-in-Markdown. The name stays; renaming the crate
+  (option C) would strand existing users for no functional gain, and
+  embedding an MDX compiler (option B) would put JavaScript-component
+  evaluation in front of the sanitizer. A test pins the current
+  behaviour: JSX tags are raw HTML and the default sanitizer removes
+  them.
 
 ### Removed
 

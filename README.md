@@ -5,7 +5,7 @@
 <h1 align="center">MDX Gen</h1>
 
 <p align="center">
-  <strong>A Rust library for processing Markdown into HTML with custom blocks, enhanced tables, class-based syntax highlighting, a hardened sanitizer, table-of-contents extraction, streaming output, and client-side mermaid diagrams.</strong>
+  <strong>A Rust library that converts CommonMark and GitHub Flavored Markdown into sanitized HTML, with custom blocks, enhanced tables, class-based syntax highlighting, a hardened sanitizer, table-of-contents extraction, streaming output, and client-side mermaid diagrams.</strong>
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
   <a href="https://crates.io/crates/mdx-gen"><img src="https://img.shields.io/crates/v/mdx-gen.svg?style=for-the-badge&color=fc8d62&logo=rust" alt="Crates.io" /></a>
   <a href="https://docs.rs/mdx-gen"><img src="https://img.shields.io/badge/docs.rs-mdx--gen-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="Docs.rs" /></a>
   <a href="https://codecov.io/gh/sebastienrousseau/mdx-gen"><img src="https://img.shields.io/codecov/c/github/sebastienrousseau/mdx-gen?style=for-the-badge&logo=codecov" alt="Coverage" /></a>
-  <a href="https://lib.rs/crates/mdx-gen"><img src="https://img.shields.io/badge/lib.rs-v0.0.7-orange.svg?style=for-the-badge" alt="lib.rs" /></a>
+  <a href="https://lib.rs/crates/mdx-gen"><img src="https://img.shields.io/badge/lib.rs-v0.0.8-orange.svg?style=for-the-badge" alt="lib.rs" /></a>
 </p>
 
 ---
@@ -28,7 +28,7 @@ Or add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-mdx-gen = "0.0.7"
+mdx-gen = "0.0.8"
 ```
 
 Requires [Rust](https://rustup.rs/) 1.89.0 or later. Works on macOS, Linux, and Windows.
@@ -46,6 +46,12 @@ Pipeline stages:
 3. **Collect** — headings for table-of-contents callers.
 4. **Render** — AST → HTML, with class-based syntax highlighting.
 5. **Sanitize** — ammonia strips dangerous tags while preserving safe structural markup.
+
+### What mdx-gen does, and what it does not
+
+mdx-gen converts **CommonMark + GitHub Flavored Markdown** (tables, strikethrough, task lists, autolinks, footnotes, math) plus its own custom blocks, table enhancement, table of contents, mermaid diagram containers and sanitizer into HTML.
+
+It does **not** implement the [MDX specification](https://mdxjs.com/): there is no JSX in Markdown, no `import`/`export` statements and no component evaluation. JSX written in a document is treated as raw HTML, so the default sanitizer strips any tag it does not allow. If you need MDX, use [`mdxjs`](https://crates.io/crates/mdxjs) (the Rust port of the MDX compiler) instead. The crate name is historical; it does not signal MDX support.
 
 ---
 
@@ -65,6 +71,10 @@ Pipeline stages:
 | **Input size cap** | Default 1 MiB, overridable |
 | **Fuzz harness** | 3 `cargo-fuzz` targets exercising the public surface |
 | **Strict validation** | Nine-check `MarkdownOptions::validate` |
+| **Unicode heading ids** | Anchors keep Cyrillic, Greek, Arabic, CJK, Thai, … letters |
+| **Lazy images** | Opt-in `loading="lazy"` and `decoding="async"` on every `<img>` |
+| **Render cache** | Opt-in `CachingProcessor` for repeated documents (`cache` feature) |
+| **Config files** | `MarkdownOptions` from TOML, YAML, JSON, … (`serde` feature) |
 
 ---
 
@@ -103,6 +113,25 @@ for h in &headings {
 ```
 
 Each `Heading { level, text, id }` carries the anchor id that the rendered HTML actually uses, including comrak's dedup suffixes (`-1`, `-2`, …).
+
+### Heading IDs for non-Latin content
+
+Heading anchors come from comrak's anchorizer, which is Unicode-aware: it lowercases the heading, keeps every letter, combining mark and digit in any script, turns spaces into `-`, and drops other punctuation. Non-Latin headings keep their script, so in-page links work for international documentation:
+
+```rust
+use mdx_gen::{process_markdown_with_toc, MarkdownOptions};
+
+let md = "# Привет мир\n\n## 日本語の見出し\n\n## 한국어 제목\n";
+let options = MarkdownOptions::default().with_header_ids("");
+let (html, headings) = process_markdown_with_toc(md, &options).unwrap();
+
+assert_eq!(headings[0].id, "привет-мир");
+assert_eq!(headings[1].id, "日本語の見出し");
+assert_eq!(headings[2].id, "한국어-제목");
+assert!(html.contains(r#"id="привет-мир""#));
+```
+
+`Heading::text` always holds the original heading text for display. The ids match GitHub's: a heading made only of punctuation or emoji has no letters left, so its id is empty (then `-1`, `-2`, … for repeats). Give such headings a word if they need a stable anchor.
 
 ### Streaming into a writer
 
@@ -197,6 +226,58 @@ let html = process_markdown(md, &options).unwrap();
 assert!(html.contains("<table"));
 ```
 
+### Lazy-loading images
+
+```rust
+use mdx_gen::{process_markdown, MarkdownOptions};
+
+let options = MarkdownOptions::default().with_lazy_images(true);
+let html = process_markdown("![Chart](chart.png \"Q3\")", &options).unwrap();
+assert!(html.contains(r#"loading="lazy""#));
+assert!(html.contains(r#"decoding="async""#));
+assert!(html.contains(r#"alt="Chart""#));
+```
+
+Off by default. When on, every Markdown image gets `loading="lazy"` (the browser defers off-screen images) and `decoding="async"` (decoding does not block rendering); `src`, `alt` and `title` are unchanged and the default sanitizer keeps both attributes. Raw `<img>` tags written as HTML are left as they are. Resizing, format conversion and `srcset` belong in a build step and are out of scope.
+
+### Caching repeated documents
+
+With the `cache` feature, `CachingProcessor` memoises rendered output for documents it has seen, which pays off when the same content is rendered again (static-site rebuilds, CMS previews, documentation CI):
+
+```rust,ignore
+use mdx_gen::{CachingProcessor, MarkdownOptions};
+
+let processor = CachingProcessor::new(MarkdownOptions::default()); // 1000 entries
+let html = processor.process("# Hello")?;          // renders
+let again = processor.process("# Hello")?;         // served from the cache
+let (html, toc) = processor.process_with_toc("# Hello")?;
+```
+
+The processor owns one `MarkdownOptions`, so the cache key is the content alone; build one processor per option set. Entries are found by a 64-bit hash and then compared byte for byte, so a hash collision costs a re-render, never a wrong page. It is `Send + Sync`: a `std::sync::Mutex` guards the map for lookups and inserts only, and rendering runs outside the lock. The least recently used entry is evicted when the bound (`CachingProcessor::with_capacity`, default 1000 documents) is reached. Hits and misses are logged at `debug` level and counted by `stats()`; `clear()` empties the cache; errors are never cached. Only whole documents are cached: there is no incremental reparse and no on-disk persistence.
+
+### Loading options from a config file
+
+With the `serde` feature, `MarkdownOptions`, `SanitizerConfig`, `CustomBlockConfig`, `CustomBlockType` and `ColumnAlignment` implement `Serialize` and `Deserialize`. Keys are kebab-case, every key is optional (missing ones keep their defaults), and unknown keys are rejected so typos surface. mdx-gen does not choose a format: use `toml`, `serde_json`, a YAML crate, or anything else serde supports.
+
+```rust,ignore
+let text = std::fs::read_to_string("mdx-gen.toml")?;
+let options: mdx_gen::MarkdownOptions = toml::from_str(&text)?;
+```
+
+```toml
+enable-lazy-images = true
+header-ids = "user-content-"
+max-input-size = 524288
+
+[custom-block-config.title-overrides]
+note = "Heads up"
+
+[sanitizer-config]
+extra-tags = ["mark"]
+```
+
+`comrak_options` is a third-party type and is not part of the serde surface: a deserialized `MarkdownOptions` starts from the default comrak options (with tables on), and comrak extensions are set in code with `with_comrak_options`. [`examples/config_file.rs`](examples/config_file.rs) loads a full TOML file and renders a document with it (`cargo run --example config_file --features serde`).
+
 ### Sanitizer configuration
 
 ```rust
@@ -256,7 +337,7 @@ if let Err(errors) = options.validate() {
 
 ---
 
-## Examples (14 standalone + 1 runner)
+## Examples (15 standalone + 1 runner)
 
 Each example is an independently-runnable binary (`cargo run --example <name>`):
 
@@ -265,7 +346,7 @@ Each example is an independently-runnable binary (`cargo run --example <name>`):
 | Onboarding | `basic`, `quickstart` |
 | Scenarios | `docs`, `alerts`, `cms`, `security`, `diagrams` |
 | Output channels | `styling`, `gallery`, `streaming`, `pipe` |
-| Integrators | `search`, `bulk`, `errors` |
+| Integrators | `search`, `bulk`, `errors`, `config_file` (needs `--features serde`) |
 | Runner | `all` |
 
 Start with `quickstart` or `docs` for a realistic walkthrough; `security` doubles as a red-team regression suite (XSS, clickjacking, `javascript:` URLs, oversized input, blockquote bombs).
@@ -277,6 +358,8 @@ Start with `quickstart` or `docs` for a realistic walkthrough; `security` double
 | Flag                  | Default | Description |
 | --------------------- | :-----: | --- |
 | `syntax_highlighting` | ✓       | Enable `syntect`-backed highlighter, `theme_css`, `apply_syntax_highlighting` |
+| `cache`               |         | `CachingProcessor`: in-memory LRU cache of rendered documents, no extra dependencies |
+| `serde`               |         | `Serialize` / `Deserialize` on `MarkdownOptions` and its config types |
 
 Minimal build: `cargo build --no-default-features`.
 

@@ -7,6 +7,7 @@
 //! for generating one from any built-in theme.
 
 use comrak::adapters::SyntaxHighlighterAdapter;
+use comrak::nodes::NodeValue;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::{self, Write};
@@ -43,7 +44,20 @@ const CLASS_STYLE: ClassStyle = ClassStyle::Spaced;
 /// [`SyntaxHighlighterAdapter::write_code_tag`].
 pub struct SyntectAdapter {
     theme_name: String,
+    prepared: Prepared,
 }
+
+/// Highlighted output computed ahead of the render, keyed by
+/// language token, then by code. Filled by [`prehighlight`].
+pub(crate) type Prepared = HashMap<String, HashMap<String, String>>;
+
+/// A document needs at least this many distinct code blocks per
+/// worker thread before [`prehighlight`] spreads them across threads.
+/// Below it, thread start-up costs more than it saves.
+pub(crate) const MIN_BLOCKS_PER_THREAD: usize = 8;
+
+/// Upper bound on worker threads used by [`prehighlight`].
+pub(crate) const MAX_HIGHLIGHT_THREADS: usize = 8;
 
 impl SyntectAdapter {
     /// Creates a new adapter, optionally with a named theme.
@@ -58,7 +72,17 @@ impl SyntectAdapter {
             .filter(|t| THEME_SET.themes.contains_key(*t))
             .unwrap_or(DEFAULT_THEME)
             .to_owned();
-        Self { theme_name }
+        Self {
+            theme_name,
+            prepared: Prepared::new(),
+        }
+    }
+
+    /// Serves blocks found in `prepared` instead of highlighting
+    /// them again during the render.
+    pub(crate) fn with_prepared(mut self, prepared: Prepared) -> Self {
+        self.prepared = prepared;
+        self
     }
 
     /// Returns the resolved theme name (after fallback).
@@ -79,30 +103,14 @@ impl SyntaxHighlighterAdapter for SyntectAdapter {
         lang: Option<&str>,
         code: &str,
     ) -> fmt::Result {
-        let syntax = lang
-            .and_then(|l| SYNTAX_SET.find_syntax_by_token(l))
-            .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
-
-        let mut generator = ClassedHTMLGenerator::new_with_class_style(
-            syntax,
-            &SYNTAX_SET,
-            CLASS_STYLE,
-        );
-
-        for line in LinesWithEndings::from(code) {
-            if generator
-                .parse_html_for_line_which_includes_newline(line)
-                .is_err()
-            {
-                // Highlighter gave up part-way: fall back to plain
-                // escaped text rather than emitting a half-built
-                // span tree.
-                return output
-                    .write_str(&html_escape::encode_text(code));
-            }
+        let ready = self
+            .prepared
+            .get(lang.unwrap_or(""))
+            .and_then(|by_code| by_code.get(code));
+        match ready {
+            Some(html) => output.write_str(html),
+            None => output.write_str(&highlight_block(lang, code)),
         }
-
-        output.write_str(&generator.finalize())
     }
 
     fn write_pre_tag(
@@ -142,6 +150,137 @@ impl SyntaxHighlighterAdapter for SyntectAdapter {
         }
         write!(output, ">")
     }
+}
+
+/// Highlights one code block with class-based spans. Falls back to
+/// plain escaped text if syntect gives up part-way, rather than
+/// emitting a half-built span tree.
+fn highlight_block(lang: Option<&str>, code: &str) -> String {
+    let syntax = lang
+        .and_then(|l| SYNTAX_SET.find_syntax_by_token(l))
+        .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
+
+    let mut generator = ClassedHTMLGenerator::new_with_class_style(
+        syntax,
+        &SYNTAX_SET,
+        CLASS_STYLE,
+    );
+
+    for line in LinesWithEndings::from(code) {
+        if generator
+            .parse_html_for_line_which_includes_newline(line)
+            .is_err()
+        {
+            return html_escape::encode_text(code).into_owned();
+        }
+    }
+
+    generator.finalize()
+}
+
+/// Splits a fenced code block's info string the way comrak does
+/// before calling the highlighter: the language token is everything
+/// up to the first ASCII whitespace.
+fn info_lang(info: &str) -> &str {
+    let end = info
+        .find(|c: char| {
+            matches!(c, ' ' | '\t' | '\n' | '\r' | '\x0b' | '\x0c')
+        })
+        .unwrap_or(info.len());
+    &info[..end]
+}
+
+/// Distinct `(language, code)` pairs of the code blocks under `root`,
+/// in document order. `math` blocks are skipped: comrak renders them
+/// without the highlighter.
+fn collect_code_blocks<'a>(
+    root: comrak::nodes::Node<'a>,
+) -> Vec<(String, String)> {
+    let mut seen = std::collections::HashSet::new();
+    let mut jobs = Vec::new();
+    for node in root.descendants() {
+        if let NodeValue::CodeBlock(ref cb) = node.data.borrow().value {
+            let lang = info_lang(&cb.info);
+            if lang != "math"
+                && seen.insert((lang.to_owned(), cb.literal.clone()))
+            {
+                jobs.push((lang.to_owned(), cb.literal.clone()));
+            }
+        }
+    }
+    jobs
+}
+
+/// Worker threads worth starting for `blocks` code blocks: none when
+/// the machine has one core or the document has too few blocks.
+fn worker_count(blocks: usize) -> usize {
+    let cores = std::thread::available_parallelism()
+        .map(std::num::NonZeroUsize::get)
+        .unwrap_or(1);
+    cores
+        .min(MAX_HIGHLIGHT_THREADS)
+        .min(blocks / MIN_BLOCKS_PER_THREAD)
+}
+
+/// Highlights the document's code blocks on scoped worker threads
+/// ahead of the render, for documents with enough blocks to make it
+/// pay (see [`MIN_BLOCKS_PER_THREAD`]).
+///
+/// Returns an empty map when the document is too small or threads
+/// are unavailable; blocks missing from the map (including any whose
+/// worker could not start) are highlighted serially during the
+/// render, so the output is identical either way.
+pub(crate) fn prehighlight<'a>(
+    root: comrak::nodes::Node<'a>,
+) -> Prepared {
+    let jobs = collect_code_blocks(root);
+    let threads = worker_count(jobs.len());
+    if threads < 2 {
+        return Prepared::new();
+    }
+    // Stripe blocks across workers so long and short blocks spread
+    // evenly instead of landing in one contiguous chunk.
+    let outputs: Vec<Option<Vec<String>>> = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..threads)
+            .map(|t| {
+                let jobs = &jobs;
+                std::thread::Builder::new().spawn_scoped(s, move || {
+                    jobs.iter()
+                        .skip(t)
+                        .step_by(threads)
+                        .map(|(lang, code)| {
+                            highlight_block(Some(lang), code)
+                        })
+                        .collect::<Vec<String>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.ok().and_then(|h| h.join().ok()))
+            .collect()
+    });
+    assemble(jobs, outputs, threads)
+}
+
+/// Files each worker's striped output back under its block's key.
+fn assemble(
+    jobs: Vec<(String, String)>,
+    outputs: Vec<Option<Vec<String>>>,
+    threads: usize,
+) -> Prepared {
+    let mut prepared = Prepared::new();
+    for (t, out) in outputs.into_iter().enumerate() {
+        let Some(out) = out else { continue };
+        let keys = jobs.iter().skip(t).step_by(threads);
+        for ((lang, code), html) in keys.zip(out) {
+            let _ = prepared
+                .entry(lang.clone())
+                .or_default()
+                .insert(code.clone(), html);
+        }
+    }
+    prepared
 }
 
 /// Highlights a code string with class-based spans (standalone API).
@@ -191,6 +330,94 @@ pub fn theme_css(theme_name: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A document with `n` distinct fenced blocks in several
+    /// languages, plus an indented block and a duplicate.
+    fn many_blocks(n: usize) -> String {
+        let langs = ["rust", "python", "toml", "", "nonexistent"];
+        let mut md = String::new();
+        for i in 0..n {
+            let lang = langs[i % langs.len()];
+            md.push_str(&format!(
+                "```{lang} extra meta\nlet x_{i} = \"<{i}>\";\n```\n\n"
+            ));
+        }
+        md.push_str(
+            "    indented <block>\n\n```rust\nlet x_0 = 1;\n```\n",
+        );
+        md
+    }
+
+    fn render(md: &str, parallel: bool) -> String {
+        let options = crate::MarkdownOptions::default()
+            .with_parallel_highlighting(parallel);
+        crate::process_markdown(md, &options).unwrap()
+    }
+
+    #[test]
+    fn parallel_highlighting_matches_serial_output() {
+        let md = many_blocks(MIN_BLOCKS_PER_THREAD * 4);
+        let serial = render(&md, false);
+        assert!(serial.contains("<span class="), "{serial}");
+        assert_eq!(render(&md, true), serial);
+    }
+
+    #[test]
+    fn prehighlight_covers_every_block_of_a_large_document() {
+        let md = many_blocks(MIN_BLOCKS_PER_THREAD * 4);
+        let arena = comrak::Arena::new();
+        let root = comrak::parse_document(
+            &arena,
+            &md,
+            &comrak::Options::default(),
+        );
+        let jobs = collect_code_blocks(root);
+        // n fenced blocks + the indented block; the trailing rust
+        // block is new code, so it counts too.
+        assert_eq!(jobs.len(), MIN_BLOCKS_PER_THREAD * 4 + 2);
+        let prepared = prehighlight(root);
+        if worker_count(jobs.len()) < 2 {
+            assert!(
+                prepared.is_empty(),
+                "single core: nothing prepared"
+            );
+            return;
+        }
+        for (lang, code) in &jobs {
+            let html = &prepared[lang][code];
+            assert_eq!(html, &highlight_block(Some(lang), code));
+        }
+    }
+
+    #[test]
+    fn small_documents_are_not_split() {
+        let arena = comrak::Arena::new();
+        let root = comrak::parse_document(
+            &arena,
+            &many_blocks(MIN_BLOCKS_PER_THREAD - 1),
+            &comrak::Options::default(),
+        );
+        assert!(prehighlight(root).is_empty());
+    }
+
+    #[test]
+    fn info_lang_matches_comrak_split() {
+        assert_eq!(info_lang("rust"), "rust");
+        assert_eq!(info_lang("rust ignore"), "rust");
+        assert_eq!(info_lang("py\tx"), "py");
+        assert_eq!(info_lang(""), "");
+    }
+
+    #[test]
+    fn math_blocks_are_not_collected() {
+        let arena = comrak::Arena::new();
+        let root = comrak::parse_document(
+            &arena,
+            "```math\nx^2\n```\n",
+            &comrak::Options::default(),
+        );
+        assert!(collect_code_blocks(root).is_empty());
+    }
 
     #[test]
     fn test_syntect_adapter_emits_class_spans() {

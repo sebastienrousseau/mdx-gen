@@ -27,6 +27,8 @@ const EXAMPLES: &[&str] = &[
     "search",
     "bulk",
     "errors",
+    // `config_file` needs `--features serde`, so this default-feature
+    // runner leaves it out: `cargo run --example config_file --features serde`.
 ];
 
 fn main() {
