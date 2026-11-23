@@ -31,7 +31,8 @@
 //!
 //! [mermaid.js]: https://mermaid.js.org/
 
-use comrak::nodes::{AstNode, NodeHtmlBlock, NodeValue};
+use crate::extensions::html_block;
+use comrak::nodes::{AstNode, NodeValue};
 
 /// Walks the comrak AST and replaces every `NodeValue::CodeBlock`
 /// whose info-string names `mermaid` with a
@@ -62,10 +63,7 @@ pub fn process_diagram_code_blocks<'a>(root: &'a AstNode<'a>) {
             _ => None,
         };
         if let Some(html) = replacement {
-            ast.value = NodeValue::HtmlBlock(NodeHtmlBlock {
-                block_type: 6,
-                literal: html,
-            });
+            ast.value = NodeValue::HtmlBlock(html_block(html));
         }
     }
 }

@@ -24,8 +24,6 @@ use crate::extensions::{
 };
 use crate::render::{render_html, RenderFlags};
 use comrak::options::Plugins;
-#[cfg(feature = "syntax_highlighting")]
-use comrak::options::RenderPlugins;
 use comrak::{Arena, Options};
 use log::{debug, info, warn};
 use std::collections::{HashMap, HashSet};
@@ -978,13 +976,13 @@ fn render_document<'a>(
     #[cfg(feature = "syntax_highlighting")]
     let adapter = highlight_adapter(root, options);
     #[cfg(feature = "syntax_highlighting")]
-    let plugins = Plugins {
-        render: RenderPlugins {
-            codefence_syntax_highlighter: adapter.as_ref().map(|a| {
+    let plugins = {
+        let mut plugins = Plugins::default();
+        plugins.render.codefence_syntax_highlighter =
+            adapter.as_ref().map(|a| {
                 a as &dyn comrak::adapters::SyntaxHighlighterAdapter
-            }),
-            ..Default::default()
-        },
+            });
+        plugins
     };
     #[cfg(not(feature = "syntax_highlighting"))]
     let plugins = {

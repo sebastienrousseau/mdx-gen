@@ -14,6 +14,16 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
+/// Builds a generic (type 6) HTML block holding `literal`.
+///
+/// comrak marks `NodeHtmlBlock` non-exhaustive, so it is built
+/// through its constructor and the block type set afterwards.
+pub(crate) fn html_block(literal: String) -> NodeHtmlBlock {
+    let mut block = NodeHtmlBlock::new(literal);
+    block.block_type = 6;
+    block
+}
+
 // ── Headings / table-of-contents ────────────────────────────────────
 
 /// A single heading discovered in a Markdown document.
@@ -49,7 +59,7 @@ pub fn collect_headings<'a>(
     let mut out = Vec::new();
     for node in root.descendants() {
         let level = match node.data.borrow().value {
-            NodeValue::Heading(h) => h.level,
+            NodeValue::Heading(ref h) => h.level,
             _ => continue,
         };
         let text = extract_text(node);
@@ -417,10 +427,7 @@ pub(crate) fn enhance_table_nodes_with<'a>(
         let start = comrak::nodes::LineColumn { line: 0, column: 0 };
         let replacement = arena.alloc(comrak::nodes::AstNode::new(
             RefCell::new(comrak::nodes::Ast::new(
-                NodeValue::HtmlBlock(NodeHtmlBlock {
-                    block_type: 6, // generic block
-                    literal: enhanced,
-                }),
+                NodeValue::HtmlBlock(html_block(enhanced)),
                 start,
             )),
         ));

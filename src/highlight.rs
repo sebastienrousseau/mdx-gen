@@ -6,10 +6,10 @@
 //! which means callers must ship a stylesheet — see [`theme_css`]
 //! for generating one from any built-in theme.
 
-use comrak::adapters::SyntaxHighlighterAdapter;
+use comrak::adapters::{SyntaxHighlightMeta, SyntaxHighlighterAdapter};
 use comrak::nodes::NodeValue;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Write};
 use std::sync::LazyLock;
 use syntect::highlighting::ThemeSet;
@@ -100,23 +100,26 @@ impl SyntaxHighlighterAdapter for SyntectAdapter {
     fn write_highlighted(
         &self,
         output: &mut dyn Write,
-        lang: Option<&str>,
-        code: &str,
+        highlight: &SyntaxHighlightMeta<'_>,
     ) -> fmt::Result {
+        let SyntaxHighlightMeta { lang, code, .. } = *highlight;
         let ready = self
             .prepared
-            .get(lang.unwrap_or(""))
+            .get(lang)
             .and_then(|by_code| by_code.get(code));
         match ready {
             Some(html) => output.write_str(html),
-            None => output.write_str(&highlight_block(lang, code)),
+            None => {
+                output.write_str(&highlight_block(Some(lang), code))
+            }
         }
     }
 
     fn write_pre_tag(
         &self,
         output: &mut dyn Write,
-        attributes: HashMap<&'static str, Cow<'_, str>>,
+        _highlight: &SyntaxHighlightMeta<'_>,
+        attributes: BTreeMap<&str, Cow<'_, str>>,
     ) -> fmt::Result {
         write!(output, "<pre")?;
         for (attr, value) in &attributes {
@@ -133,7 +136,8 @@ impl SyntaxHighlighterAdapter for SyntectAdapter {
     fn write_code_tag(
         &self,
         output: &mut dyn Write,
-        attributes: HashMap<&'static str, Cow<'_, str>>,
+        _highlight: &SyntaxHighlightMeta<'_>,
+        attributes: BTreeMap<&str, Cow<'_, str>>,
     ) -> fmt::Result {
         write!(output, "<code")?;
         for (attr, value) in &attributes {
@@ -331,6 +335,11 @@ pub fn theme_css(theme_name: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    /// Code-block metadata for the tag-writing tests, which ignore it.
+    fn meta() -> SyntaxHighlightMeta<'static> {
+        SyntaxHighlightMeta::new("", "", "")
+    }
+
     /// A document with `n` distinct fenced blocks in several
     /// languages, plus an indented block and a duplicate.
     fn many_blocks(n: usize) -> String {
@@ -426,8 +435,7 @@ mod tests {
         adapter
             .write_highlighted(
                 &mut output,
-                Some("rust"),
-                "fn main() {}",
+                &SyntaxHighlightMeta::new("rust", "", "fn main() {}"),
             )
             .unwrap();
         assert!(
@@ -447,8 +455,11 @@ mod tests {
         adapter
             .write_highlighted(
                 &mut output,
-                Some("nonexistent-lang-xyz"),
-                "hello world",
+                &SyntaxHighlightMeta::new(
+                    "nonexistent-lang-xyz",
+                    "",
+                    "hello world",
+                ),
             )
             .unwrap();
         // Should not panic, should produce some output
@@ -480,10 +491,10 @@ mod tests {
     fn test_write_pre_tag_with_attributes() {
         let adapter = SyntectAdapter::new(None);
         let mut output = String::new();
-        let mut attrs = HashMap::new();
+        let mut attrs = BTreeMap::new();
         attrs.insert("class", Cow::Borrowed("highlight"));
         attrs.insert("data-lang", Cow::Borrowed("rust"));
-        adapter.write_pre_tag(&mut output, attrs).unwrap();
+        adapter.write_pre_tag(&mut output, &meta(), attrs).unwrap();
         assert!(output.starts_with("<pre"));
         assert!(output.ends_with('>'));
         assert!(output.contains("class=\"highlight\""));
@@ -494,7 +505,9 @@ mod tests {
     fn test_write_pre_tag_no_attributes() {
         let adapter = SyntectAdapter::new(None);
         let mut output = String::new();
-        adapter.write_pre_tag(&mut output, HashMap::new()).unwrap();
+        adapter
+            .write_pre_tag(&mut output, &meta(), BTreeMap::new())
+            .unwrap();
         assert_eq!(output, "<pre>");
     }
 
@@ -502,9 +515,9 @@ mod tests {
     fn test_write_code_tag_with_attributes() {
         let adapter = SyntectAdapter::new(None);
         let mut output = String::new();
-        let mut attrs = HashMap::new();
+        let mut attrs = BTreeMap::new();
         attrs.insert("class", Cow::Borrowed("language-rust"));
-        adapter.write_code_tag(&mut output, attrs).unwrap();
+        adapter.write_code_tag(&mut output, &meta(), attrs).unwrap();
         assert!(output.starts_with("<code"));
         assert!(output.ends_with('>'));
         assert!(output.contains("class=\"language-rust\""));
@@ -514,10 +527,10 @@ mod tests {
     fn test_write_code_tag_skips_empty_attributes() {
         let adapter = SyntectAdapter::new(None);
         let mut output = String::new();
-        let mut attrs = HashMap::new();
+        let mut attrs = BTreeMap::new();
         attrs.insert("class", Cow::Borrowed(""));
         attrs.insert("id", Cow::Borrowed("my-code"));
-        adapter.write_code_tag(&mut output, attrs).unwrap();
+        adapter.write_code_tag(&mut output, &meta(), attrs).unwrap();
         // Empty "class" value should be skipped
         assert!(!output.contains("class"));
         // Non-empty "id" should be present
@@ -528,7 +541,9 @@ mod tests {
     fn test_write_code_tag_no_attributes() {
         let adapter = SyntectAdapter::new(None);
         let mut output = String::new();
-        adapter.write_code_tag(&mut output, HashMap::new()).unwrap();
+        adapter
+            .write_code_tag(&mut output, &meta(), BTreeMap::new())
+            .unwrap();
         assert_eq!(output, "<code>");
     }
 
@@ -536,9 +551,9 @@ mod tests {
     fn test_write_pre_tag_escapes_attribute_values() {
         let adapter = SyntectAdapter::new(None);
         let mut output = String::new();
-        let mut attrs = HashMap::new();
+        let mut attrs = BTreeMap::new();
         attrs.insert("data-info", Cow::Borrowed("a\"b"));
-        adapter.write_pre_tag(&mut output, attrs).unwrap();
+        adapter.write_pre_tag(&mut output, &meta(), attrs).unwrap();
         // The double quote inside the value should be escaped
         assert!(!output.contains("a\"b"));
         assert!(output.contains("data-info="));
@@ -549,7 +564,10 @@ mod tests {
         let adapter = SyntectAdapter::new(None);
         let mut output = String::new();
         adapter
-            .write_highlighted(&mut output, None, "plain text")
+            .write_highlighted(
+                &mut output,
+                &SyntaxHighlightMeta::new("", "", "plain text"),
+            )
             .unwrap();
         assert!(!output.is_empty());
     }
@@ -587,8 +605,11 @@ mod tests {
     #[test]
     fn test_write_pre_tag_propagates_write_error() {
         let adapter = SyntectAdapter::new(None);
-        let err =
-            adapter.write_pre_tag(&mut FailingWrite, HashMap::new());
+        let err = adapter.write_pre_tag(
+            &mut FailingWrite,
+            &meta(),
+            BTreeMap::new(),
+        );
         assert!(err.is_err());
     }
 
@@ -609,10 +630,10 @@ mod tests {
         }
 
         let adapter = SyntectAdapter::new(None);
-        let mut attrs = HashMap::new();
+        let mut attrs = BTreeMap::new();
         attrs.insert("class", Cow::Borrowed("demo"));
         let err = adapter
-            .write_pre_tag(&mut FailAfterFirst(0), attrs)
+            .write_pre_tag(&mut FailAfterFirst(0), &meta(), attrs)
             .unwrap_err();
         let _ = err; // just asserting it errored
     }
@@ -620,8 +641,11 @@ mod tests {
     #[test]
     fn test_write_code_tag_propagates_write_error() {
         let adapter = SyntectAdapter::new(None);
-        let err =
-            adapter.write_code_tag(&mut FailingWrite, HashMap::new());
+        let err = adapter.write_code_tag(
+            &mut FailingWrite,
+            &meta(),
+            BTreeMap::new(),
+        );
         assert!(err.is_err());
     }
 
@@ -640,10 +664,10 @@ mod tests {
         }
 
         let adapter = SyntectAdapter::new(None);
-        let mut attrs = HashMap::new();
+        let mut attrs = BTreeMap::new();
         attrs.insert("class", Cow::Borrowed("language-rust"));
         let err = adapter
-            .write_code_tag(&mut FailAfterFirst(0), attrs)
+            .write_code_tag(&mut FailAfterFirst(0), &meta(), attrs)
             .unwrap_err();
         let _ = err;
     }
@@ -656,8 +680,7 @@ mod tests {
         let err = adapter
             .write_highlighted(
                 &mut FailingWrite,
-                Some("rust"),
-                "fn x() {}",
+                &SyntaxHighlightMeta::new("rust", "", "fn x() {}"),
             )
             .unwrap_err();
         let _ = err;

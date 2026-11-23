@@ -108,6 +108,13 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
   unaffected; a struct literal that lists every field needs
   `..Default::default()`.
 - `html-escape` 0.3.1 and `log` 0.4.35, from Dependabot.
+- **Breaking for code that names comrak types:** comrak moves from
+  0.59 to 1.1 (Dependabot #62). `MarkdownOptions::comrak_options` and
+  `with_comrak_options` take comrak 1.x `Options`, so callers that
+  build them need comrak 1.x too. Rendered output is unchanged: the
+  syntect adapter keeps the same `<pre>`/`<code>` tags and highlighted
+  spans, and the full test suite passes as before.
+- `regex` 1.13.2, from Dependabot (#61).
 - **Scope decision: mdx-gen is a CommonMark + GFM to HTML library,
   not an MDX compiler** (#30, option A). The README, the crate docs
   and the Cargo `description` now say so and point to the `mdxjs`
