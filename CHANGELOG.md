@@ -11,6 +11,17 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ### Added
 
+- **Config-file support** (#33, `serde` feature, off by default):
+  `Serialize` and `Deserialize` on `MarkdownOptions`,
+  `SanitizerConfig`, `CustomBlockConfig`, `CustomBlockType` and
+  `ColumnAlignment`. Keys are kebab-case (`enable-lazy-images`), every
+  key is optional and falls back to the default, and unknown keys are
+  errors. `comrak_options` is left out of the serde surface (comrak's
+  `Options` is a third-party type that holds callbacks): a
+  deserialized value starts from mdx-gen's default comrak options,
+  and extensions are set in code. mdx-gen takes no format crate;
+  tests load TOML (`toml`) and JSON (`serde_json`), both
+  dev-dependencies only. New example: `config_file`.
 - **`CachingProcessor`, an opt-in render cache** (#31, `cache`
   feature, off by default, no new dependencies). It owns one
   `MarkdownOptions` and memoises `process` / `process_with_toc`

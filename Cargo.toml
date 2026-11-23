@@ -71,6 +71,7 @@ comrak = { version = "0.59", default-features = false }
 html-escape = "0.3"
 log = "0.4"
 regex = "1.12"
+serde = { version = "1.0.228", optional = true, features = ["derive"] }
 syntect = { version = "5.2", optional = true, default-features = false, features = ["default-themes", "default-syntaxes", "html", "regex-fancy"] }
 thiserror = "2.0"
 
@@ -98,6 +99,11 @@ syntax_highlighting = ["syntect"]
 # No extra dependencies.
 cache = []
 
+# Serialize / Deserialize for MarkdownOptions and its config types,
+# so callers can load options from TOML, YAML, JSON, ... The format
+# crate is the caller's choice.
+serde = ["dep:serde"]
+
 # -----------------------------------------------------------------------------
 # Development Dependencies
 # -----------------------------------------------------------------------------
@@ -107,6 +113,9 @@ tempfile = "3.13"
 assert_fs = "1.1"
 predicates = "3.1"
 criterion = "0.8"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1"
+toml = "1.2"
 
 [[bench]]
 name = "markdown_benchmark"
@@ -181,6 +190,11 @@ path = "examples/errors.rs"
 [[example]]
 name = "diagrams"
 path = "examples/diagrams.rs"
+
+[[example]]
+name = "config_file"
+path = "examples/config_file.rs"
+required-features = ["serde"]
 
 [[example]]
 name = "all"

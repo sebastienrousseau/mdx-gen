@@ -143,6 +143,11 @@ static CUSTOM_BLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Alignment options for table columns.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum ColumnAlignment {
     /// Align the column to the left.
     Left,
@@ -156,6 +161,11 @@ pub enum ColumnAlignment {
 
 /// Represents different types of custom blocks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum CustomBlockType {
     /// A note block.
     Note,
@@ -256,6 +266,14 @@ impl FromStr for CustomBlockType {
 /// Allows overriding the default CSS class and title for each
 /// block type, enabling use with CSS frameworks other than Bootstrap.
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(
+    feature = "serde",
+    serde(default, rename_all = "kebab-case", deny_unknown_fields)
+)]
 pub struct CustomBlockConfig {
     /// Override the CSS alert class per block type.
     pub class_overrides: HashMap<CustomBlockType, String>,

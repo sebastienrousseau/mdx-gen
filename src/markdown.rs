@@ -40,9 +40,42 @@ use crate::highlight::SyntectAdapter;
 pub const DEFAULT_MAX_INPUT_SIZE: usize = 1_048_576;
 
 /// Options for configuring Markdown processing behavior.
+///
+/// With the `serde` feature, the type implements `Serialize` and
+/// `Deserialize` with kebab-case keys (`enable-lazy-images`). Every
+/// key is optional and falls back to [`MarkdownOptions::default`];
+/// unknown keys are rejected. `comrak_options` is not part of the
+/// serialised form: a deserialised value starts from the default
+/// comrak options (tables on), and comrak extensions are set in code
+/// with [`MarkdownOptions::with_comrak_options`].
+///
+/// ```
+/// # #[cfg(feature = "serde")] {
+/// use mdx_gen::MarkdownOptions;
+///
+/// let options: MarkdownOptions = toml::from_str(r#"
+///     enable-lazy-images = true
+///     header-ids = "user-content-"
+///
+///     [sanitizer-config]
+///     extra-tags = ["mark"]
+/// "#).unwrap();
+/// assert!(options.enable_lazy_images);
+/// assert!(options.enable_custom_blocks); // default kept
+/// # }
+/// ```
 #[derive(Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(
+    feature = "serde",
+    serde(default, rename_all = "kebab-case", deny_unknown_fields)
+)]
 pub struct MarkdownOptions<'a> {
     /// Options for the underlying Comrak Markdown parser.
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub comrak_options: Options<'a>,
     /// Enable or disable processing of custom blocks.
     pub enable_custom_blocks: bool,
@@ -607,6 +640,14 @@ impl fmt::Debug for MarkdownOptions<'_> {
 /// defaults that ship with `mdx-gen`. Wire an instance into
 /// [`MarkdownOptions::with_sanitizer_config`].
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(
+    feature = "serde",
+    serde(default, rename_all = "kebab-case", deny_unknown_fields)
+)]
 pub struct SanitizerConfig {
     /// Additional tags to allow (beyond the defaults).
     pub extra_tags: Vec<String>,
