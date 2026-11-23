@@ -71,6 +71,7 @@ It does **not** implement the [MDX specification](https://mdxjs.com/): there is 
 | **Input size cap** | Default 1 MiB, overridable |
 | **Fuzz harness** | 3 `cargo-fuzz` targets exercising the public surface |
 | **Strict validation** | Nine-check `MarkdownOptions::validate` |
+| **Lazy images** | Opt-in `loading="lazy"` and `decoding="async"` on every `<img>` |
 
 ---
 
@@ -202,6 +203,20 @@ let options = MarkdownOptions::default()
 let html = process_markdown(md, &options).unwrap();
 assert!(html.contains("<table"));
 ```
+
+### Lazy-loading images
+
+```rust
+use mdx_gen::{process_markdown, MarkdownOptions};
+
+let options = MarkdownOptions::default().with_lazy_images(true);
+let html = process_markdown("![Chart](chart.png \"Q3\")", &options).unwrap();
+assert!(html.contains(r#"loading="lazy""#));
+assert!(html.contains(r#"decoding="async""#));
+assert!(html.contains(r#"alt="Chart""#));
+```
+
+Off by default. When on, every Markdown image gets `loading="lazy"` (the browser defers off-screen images) and `decoding="async"` (decoding does not block rendering); `src`, `alt` and `title` are unchanged and the default sanitizer keeps both attributes. Raw `<img>` tags written as HTML are left as they are. Resizing, format conversion and `srcset` belong in a build step and are out of scope.
 
 ### Sanitizer configuration
 

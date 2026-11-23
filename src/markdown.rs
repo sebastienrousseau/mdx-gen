@@ -19,9 +19,10 @@
 
 use crate::error::MarkdownError;
 use crate::extensions::{
-    collect_headings, enhance_table_nodes, process_custom_block_nodes,
-    CustomBlockConfig, Heading,
+    collect_headings, enhance_table_nodes_with,
+    process_custom_block_nodes, CustomBlockConfig, Heading,
 };
+use crate::render::{render_html, RenderFlags};
 use comrak::options::Plugins;
 #[cfg(feature = "syntax_highlighting")]
 use comrak::options::RenderPlugins;
@@ -98,6 +99,15 @@ pub struct MarkdownOptions<'a> {
     /// syntax highlighting is off or the `syntax_highlighting`
     /// feature is disabled.
     pub parallel_highlighting: bool,
+    /// Add `loading="lazy"` and `decoding="async"` to every image
+    /// rendered from Markdown (`![alt](src)`). Off by default.
+    ///
+    /// Browsers then defer off-screen images and decode them off the
+    /// main thread. `src`, `alt` and `title` are unchanged, and the
+    /// default sanitizer allows both attributes on `<img>`. Raw
+    /// `<img>` tags written as HTML in the source are left as they
+    /// are.
+    pub enable_lazy_images: bool,
 }
 
 impl<'a> Default for MarkdownOptions<'a> {
@@ -124,6 +134,7 @@ impl<'a> Default for MarkdownOptions<'a> {
             sanitizer_config: None,
             enable_diagrams: false,
             parallel_highlighting: true,
+            enable_lazy_images: false,
         }
     }
 }
@@ -230,6 +241,13 @@ impl<'a> MarkdownOptions<'a> {
     /// documents. See [`MarkdownOptions::parallel_highlighting`].
     pub fn with_parallel_highlighting(mut self, enable: bool) -> Self {
         self.parallel_highlighting = enable;
+        self
+    }
+
+    /// Enables or disables `loading="lazy"` / `decoding="async"` on
+    /// images. See [`MarkdownOptions::enable_lazy_images`].
+    pub fn with_lazy_images(mut self, enable: bool) -> Self {
+        self.enable_lazy_images = enable;
         self
     }
 
@@ -576,6 +594,7 @@ impl fmt::Debug for MarkdownOptions<'_> {
             .field("sanitizer_config", &self.sanitizer_config)
             .field("enable_diagrams", &self.enable_diagrams)
             .field("parallel_highlighting", &self.parallel_highlighting)
+            .field("enable_lazy_images", &self.enable_lazy_images)
             .finish()
     }
 }
@@ -830,6 +849,10 @@ fn pipeline<W: Write>(
         comrak_opts.extension.header_id_prefix = Some(prefix.clone());
     }
 
+    let flags = RenderFlags {
+        lazy_images: options.enable_lazy_images,
+    };
+
     // ── 3. Parse → AST ─────────────────────────────────────────
     let arena = Arena::new();
     let root = comrak::parse_document(&arena, content, &comrak_opts);
@@ -853,7 +876,7 @@ fn pipeline<W: Write>(
     }
     if options.enable_enhanced_tables {
         debug!("Enhancing tables at AST level");
-        enhance_table_nodes(root, &arena, &comrak_opts);
+        enhance_table_nodes_with(root, &arena, &comrak_opts, flags);
     }
 
     // ── 5. Render to HTML ───────────────────────────────────────
@@ -883,13 +906,8 @@ fn pipeline<W: Write>(
     let plugins = Plugins::default();
 
     let mut html = String::new();
-    comrak::format_html_with_plugins(
-        root,
-        &comrak_opts,
-        &mut html,
-        &plugins,
-    )
-    .map_err(|e| MarkdownError::RenderError(e.to_string()))?;
+    render_html(root, &comrak_opts, &mut html, &plugins, flags)
+        .map_err(|e| MarkdownError::RenderError(e.to_string()))?;
 
     // ── 6. Sanitize and emit ────────────────────────────────────
     if options.allow_unsafe_html {
@@ -1006,6 +1024,9 @@ fn configure_default_sanitizer<'a>(builder: &mut ammonia::Builder<'a>) {
         .add_tag_attributes("h5", &["id"])
         .add_tag_attributes("h6", &["id"])
         .add_tag_attributes("a", &["id"])
+        // `with_lazy_images` hints; both take fixed keyword values
+        // and cannot carry script or URLs.
+        .add_tag_attributes("img", &["loading", "decoding"])
         .allowed_classes(allowed_classes)
         // Syntect's class-based highlighter emits open-ended class
         // names on <span> (one per grammar scope). Whitelisting them

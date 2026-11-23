@@ -6,6 +6,7 @@
 //! the default `syntax_highlighting` feature provides.
 
 use crate::error::MarkdownError;
+use crate::render::{render_html, RenderFlags};
 use comrak::nodes::{NodeHtmlBlock, NodeValue};
 use regex::Regex;
 use std::cell::RefCell;
@@ -350,6 +351,23 @@ pub fn enhance_table_nodes<'a>(
     arena: &'a comrak::Arena<'a>,
     options: &comrak::Options,
 ) {
+    enhance_table_nodes_with(
+        root,
+        arena,
+        options,
+        RenderFlags::default(),
+    );
+}
+
+/// [`enhance_table_nodes`] with the pipeline's render flags, so table
+/// cells render the same way as the rest of the document (for
+/// example lazy-loading images).
+pub(crate) fn enhance_table_nodes_with<'a>(
+    root: comrak::nodes::Node<'a>,
+    arena: &'a comrak::Arena<'a>,
+    options: &comrak::Options,
+    flags: RenderFlags,
+) {
     // Collect table nodes first to avoid borrow issues during mutation
     let table_nodes: Vec<comrak::nodes::Node<'a>> = root
         .descendants()
@@ -361,8 +379,15 @@ pub fn enhance_table_nodes<'a>(
     for table_node in table_nodes {
         // Render this table subtree to HTML
         let mut table_html = String::new();
-        if comrak::format_html(table_node, options, &mut table_html)
-            .is_err()
+        let plugins = comrak::options::Plugins::default();
+        if render_html(
+            table_node,
+            options,
+            &mut table_html,
+            &plugins,
+            flags,
+        )
+        .is_err()
         {
             continue;
         }

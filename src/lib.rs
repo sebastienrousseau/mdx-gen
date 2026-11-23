@@ -39,6 +39,9 @@ pub mod validation;
 /// The `markdown` module contains the core processing pipeline.
 pub mod markdown;
 
+/// Rendering hooks layered over comrak's HTML formatter.
+mod render;
+
 // ── Re-exports ──────────────────────────────────────────────────────
 
 pub use error::MarkdownError;

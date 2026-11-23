@@ -9,6 +9,17 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ## [Unreleased]
 
+### Added
+
+- **Lazy-loading images** (#32): `MarkdownOptions::with_lazy_images(true)`
+  (field `enable_lazy_images`, default `false`) adds
+  `loading="lazy"` and `decoding="async"` to every image rendered
+  from Markdown, including images inside enhanced tables and figure
+  captions. The attributes are written by an `Image` render hook on
+  comrak's formatter, so `src`, `alt` and `title` keep comrak's
+  escaping. The default sanitizer now allows `loading` and
+  `decoding` on `<img>` (ammonia's defaults strip them).
+
 ### Security
 
 - **ammonia 4.2.5 or newer**, which fixes a mutation XSS that combined
