@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 "Breaking changes" section before upgrading.
 
-## [Unreleased]
+## [0.0.8] - 2026-11-23
 
 ### Added
 
@@ -71,8 +71,42 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
   unsound xattr functions) in `Cargo.lock`. `url` reaches mdx-gen
   through ammonia; `rustix` only through dev-dependencies.
 
+### Performance
+
+- **Large documents render 38-47% faster** (#29). A stage profile of
+  the 100 KB benchmark document (instructions retired over five
+  renders) put syntect highlighting at about 81% of the work and
+  ammonia sanitizing at about 30% of the total; comrak parsing was
+  under 4%. Code blocks are independent, so documents with at least
+  8 distinct blocks per worker now highlight them on up to
+  `min(cores, 8)` scoped threads before the render; output is
+  byte-identical, and smaller documents never start a thread.
+  `MarkdownOptions::with_parallel_highlighting(false)` opts out.
+  Median of six interleaved runs (each the fastest of several
+  renders), `main` against this release, on an Apple A18 Pro that
+  other jobs kept at a load average of 150-180 throughout, so the
+  absolute times are inflated and noisy:
+
+  | Document | main | 0.0.8 | Change |
+  | :--- | ---: | ---: | ---: |
+  | 10 KB | 6.92 ms | 7.26 ms | +4.9% (within noise; fastest runs 6.60 vs 6.46 ms) |
+  | 100 KB | 83.5 ms | 49.0 ms | -41% |
+  | 500 KB | 505 ms | 314 ms | -38% |
+  | 1 MiB | 1246 ms | 661 ms | -47% |
+
+  The benchmark group is `cargo bench --bench markdown_benchmark --
+  "Large documents"`. Memory: the prepared highlights for a document
+  are held until its render finishes, one extra copy of each code
+  block's highlighted HTML.
+
 ### Changed
 
+- **Breaking for struct literals:** `MarkdownOptions` has two new
+  public fields, `parallel_highlighting` (default `true`) and
+  `enable_lazy_images` (default `false`). Code that builds it with
+  `MarkdownOptions::default()` or `new()` and the builders is
+  unaffected; a struct literal that lists every field needs
+  `..Default::default()`.
 - `html-escape` 0.3.1 and `log` 0.4.35, from Dependabot.
 - **Scope decision: mdx-gen is a CommonMark + GFM to HTML library,
   not an MDX compiler** (#30, option A). The README, the crate docs
