@@ -1,8 +1,7 @@
 //! Opt-in full-document render cache (`cache` feature).
 //!
 //! [`CachingProcessor`] owns one [`MarkdownOptions`] and memoises the
-//! output of [`process_markdown`](crate::process_markdown) and
-//! [`process_markdown_with_toc`](crate::process_markdown_with_toc)
+//! output of [`process_markdown`] and [`process_markdown_with_toc`]
 //! per input document. Because the options are fixed when the
 //! processor is built, the cache key only has to identify the
 //! content: build one processor per option set.

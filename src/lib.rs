@@ -42,7 +42,8 @@ pub mod markdown;
 /// Rendering hooks layered over comrak's HTML formatter.
 mod render;
 
-/// Opt-in in-memory cache of rendered documents.
+// Opt-in in-memory cache of rendered documents; documented by its
+// own `//!` header so intra-doc links resolve in the module's scope.
 #[cfg(feature = "cache")]
 pub mod cache;
 
