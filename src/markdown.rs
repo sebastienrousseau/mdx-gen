@@ -861,35 +861,11 @@ fn pipeline<W: Write>(
     info!("Starting markdown processing");
     debug!("Markdown options: {:?}", options);
 
-    // ── 0. Resource limits ──────────────────────────────────────
-    if options.max_input_size > 0
-        && content.len() > options.max_input_size
-    {
-        return Err(MarkdownError::InputTooLarge {
-            size: content.len(),
-            limit: options.max_input_size,
-        });
-    }
-
-    // ── 1. Validate options ─────────────────────────────────────
-    if let Err(errors) = options.validate() {
-        for (field, err) in &errors {
-            warn!("Invalid MarkdownOptions.{field}: {err}");
-        }
-        return Err(MarkdownError::from(errors));
-    }
+    // ── 0-1. Resource limits and option validation ──────────────
+    check_input(content, options)?;
 
     // ── 2. Build comrak options ─────────────────────────────────
-    let mut comrak_opts = options.comrak_options.clone();
-    // Always enable unsafe for internal rendering — we sanitize
-    // at the end if the caller wants safety.
-    comrak_opts.render.r#unsafe = true;
-
-    // Wire header_ids into comrak's extension
-    if let Some(ref prefix) = options.header_ids {
-        comrak_opts.extension.header_id_prefix = Some(prefix.clone());
-    }
-
+    let comrak_opts = render_comrak_options(options);
     let flags = RenderFlags {
         lazy_images: options.enable_lazy_images,
     };
@@ -899,6 +875,74 @@ fn pipeline<W: Write>(
     let root = comrak::parse_document(&arena, content, &comrak_opts);
 
     // ── 4. AST transforms ───────────────────────────────────────
+    transform_ast(root, &arena, options, &comrak_opts, flags, toc_out);
+
+    // ── 5. Render to HTML ───────────────────────────────────────
+    let html = render_document(root, options, &comrak_opts, flags)?;
+
+    // ── 6. Sanitize and emit ────────────────────────────────────
+    if options.allow_unsafe_html {
+        writer.write_all(html.as_bytes())?;
+    } else {
+        debug!("Sanitizing HTML output");
+        sanitize_html_to_writer(
+            &html,
+            writer,
+            options.sanitizer_config.as_ref(),
+        )?;
+    }
+
+    info!("Markdown processing completed successfully");
+    Ok(())
+}
+
+/// Rejects input over `max_input_size` and options that fail
+/// [`MarkdownOptions::validate`].
+fn check_input(
+    content: &str,
+    options: &MarkdownOptions,
+) -> Result<(), MarkdownError> {
+    if options.max_input_size > 0
+        && content.len() > options.max_input_size
+    {
+        return Err(MarkdownError::InputTooLarge {
+            size: content.len(),
+            limit: options.max_input_size,
+        });
+    }
+    if let Err(errors) = options.validate() {
+        for (field, err) in &errors {
+            warn!("Invalid MarkdownOptions.{field}: {err}");
+        }
+        return Err(MarkdownError::from(errors));
+    }
+    Ok(())
+}
+
+/// The comrak options the pipeline renders with: the caller's, with
+/// raw HTML always on (sanitizing happens afterwards when the caller
+/// wants safety) and `header_ids` wired into comrak's extension.
+fn render_comrak_options<'a>(
+    options: &MarkdownOptions<'a>,
+) -> Options<'a> {
+    let mut comrak_opts = options.comrak_options.clone();
+    comrak_opts.render.r#unsafe = true;
+    if let Some(ref prefix) = options.header_ids {
+        comrak_opts.extension.header_id_prefix = Some(prefix.clone());
+    }
+    comrak_opts
+}
+
+/// Runs the enabled AST transforms in pipeline order and fills
+/// `toc_out` when requested.
+fn transform_ast<'a>(
+    root: comrak::nodes::Node<'a>,
+    arena: &'a Arena<'a>,
+    options: &MarkdownOptions,
+    comrak_opts: &Options,
+    flags: RenderFlags,
+    toc_out: Option<&mut Vec<Heading>>,
+) {
     if options.enable_custom_blocks {
         debug!("Processing custom blocks at AST level");
         process_custom_block_nodes(root, &options.custom_block_config);
@@ -917,53 +961,63 @@ fn pipeline<W: Write>(
     }
     if options.enable_enhanced_tables {
         debug!("Enhancing tables at AST level");
-        enhance_table_nodes_with(root, &arena, &comrak_opts, flags);
+        enhance_table_nodes_with(root, arena, comrak_opts, flags);
     }
+}
 
-    // ── 5. Render to HTML ───────────────────────────────────────
+/// Renders the transformed AST to HTML, highlighting code blocks
+/// when enabled.
+fn render_document<'a>(
+    root: comrak::nodes::Node<'a>,
+    options: &MarkdownOptions,
+    comrak_opts: &Options,
+    flags: RenderFlags,
+) -> Result<String, MarkdownError> {
     debug!("Rendering AST to HTML");
 
     #[cfg(feature = "syntax_highlighting")]
-    let adapter;
+    let adapter = highlight_adapter(root, options);
     #[cfg(feature = "syntax_highlighting")]
-    let plugins = if options.enable_syntax_highlighting {
-        let prepared = if options.parallel_highlighting {
-            crate::highlight::prehighlight(root)
-        } else {
-            crate::highlight::Prepared::new()
-        };
-        adapter = SyntectAdapter::new(options.syntax_theme.as_deref())
-            .with_prepared(prepared);
-        Plugins {
-            render: RenderPlugins {
-                codefence_syntax_highlighter: Some(&adapter),
-                ..Default::default()
-            },
-        }
-    } else {
-        Plugins::default()
+    let plugins = Plugins {
+        render: RenderPlugins {
+            codefence_syntax_highlighter: adapter.as_ref().map(|a| {
+                a as &dyn comrak::adapters::SyntaxHighlighterAdapter
+            }),
+            ..Default::default()
+        },
     };
     #[cfg(not(feature = "syntax_highlighting"))]
-    let plugins = Plugins::default();
+    let plugins = {
+        let _ = options;
+        Plugins::default()
+    };
 
     let mut html = String::new();
-    render_html(root, &comrak_opts, &mut html, &plugins, flags)
+    render_html(root, comrak_opts, &mut html, &plugins, flags)
         .map_err(|e| MarkdownError::RenderError(e.to_string()))?;
+    Ok(html)
+}
 
-    // ── 6. Sanitize and emit ────────────────────────────────────
-    if options.allow_unsafe_html {
-        writer.write_all(html.as_bytes())?;
-    } else {
-        debug!("Sanitizing HTML output");
-        sanitize_html_to_writer(
-            &html,
-            writer,
-            options.sanitizer_config.as_ref(),
-        )?;
+/// The syntect adapter for this render, with large documents'
+/// blocks pre-highlighted in parallel, or `None` when highlighting
+/// is off.
+#[cfg(feature = "syntax_highlighting")]
+fn highlight_adapter<'a>(
+    root: comrak::nodes::Node<'a>,
+    options: &MarkdownOptions,
+) -> Option<SyntectAdapter> {
+    if !options.enable_syntax_highlighting {
+        return None;
     }
-
-    info!("Markdown processing completed successfully");
-    Ok(())
+    let prepared = if options.parallel_highlighting {
+        crate::highlight::prehighlight(root)
+    } else {
+        crate::highlight::Prepared::new()
+    };
+    Some(
+        SyntectAdapter::new(options.syntax_theme.as_deref())
+            .with_prepared(prepared),
+    )
 }
 
 // ── HTML sanitization ───────────────────────────────────────────────

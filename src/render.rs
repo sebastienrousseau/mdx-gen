@@ -39,22 +39,32 @@ fn close_lazy_image(
     link: &NodeLink,
 ) -> Result<ChildRendering, fmt::Error> {
     use fmt::Write;
-    if !link.title.is_empty() {
-        context.write_str("\" title=\"")?;
-        context.escape(&link.title)?;
+    let title = escaped(&link.title)?;
+    let mut tail = String::new();
+    if !title.is_empty() {
+        tail.push_str("\" title=\"");
+        tail.push_str(&title);
     }
-    context.write_str("\"")?;
-    context.write_str(LAZY_IMAGE_ATTRS)?;
-    context.write_str(" />")?;
+    tail.push('"');
+    tail.push_str(LAZY_IMAGE_ATTRS);
+    tail.push_str(" />");
     if context.options.render.figure_with_caption {
-        if !link.title.is_empty() {
-            context.write_str("<figcaption>")?;
-            context.escape(&link.title)?;
-            context.write_str("</figcaption>")?;
+        if !title.is_empty() {
+            tail.push_str("<figcaption>");
+            tail.push_str(&title);
+            tail.push_str("</figcaption>");
         }
-        context.write_str("</figure>")?;
+        tail.push_str("</figure>");
     }
+    context.write_str(&tail)?;
     Ok(ChildRendering::HTML)
+}
+
+/// `text` escaped the way comrak escapes attribute and text content.
+fn escaped(text: &str) -> Result<String, fmt::Error> {
+    let mut out = String::new();
+    comrak::html::escape(&mut out, text)?;
+    Ok(out)
 }
 
 /// Renders `root` to `output` with [`MdxFormatter`].
