@@ -71,6 +71,7 @@ It does **not** implement the [MDX specification](https://mdxjs.com/): there is 
 | **Input size cap** | Default 1 MiB, overridable |
 | **Fuzz harness** | 3 `cargo-fuzz` targets exercising the public surface |
 | **Strict validation** | Nine-check `MarkdownOptions::validate` |
+| **Unicode heading ids** | Anchors keep Cyrillic, Greek, Arabic, CJK, Thai, … letters |
 | **Lazy images** | Opt-in `loading="lazy"` and `decoding="async"` on every `<img>` |
 
 ---
@@ -110,6 +111,25 @@ for h in &headings {
 ```
 
 Each `Heading { level, text, id }` carries the anchor id that the rendered HTML actually uses, including comrak's dedup suffixes (`-1`, `-2`, …).
+
+### Heading IDs for non-Latin content
+
+Heading anchors come from comrak's anchorizer, which is Unicode-aware: it lowercases the heading, keeps every letter, combining mark and digit in any script, turns spaces into `-`, and drops other punctuation. Non-Latin headings keep their script, so in-page links work for international documentation:
+
+```rust
+use mdx_gen::{process_markdown_with_toc, MarkdownOptions};
+
+let md = "# Привет мир\n\n## 日本語の見出し\n\n## 한국어 제목\n";
+let options = MarkdownOptions::default().with_header_ids("");
+let (html, headings) = process_markdown_with_toc(md, &options).unwrap();
+
+assert_eq!(headings[0].id, "привет-мир");
+assert_eq!(headings[1].id, "日本語の見出し");
+assert_eq!(headings[2].id, "한국어-제목");
+assert!(html.contains(r#"id="привет-мир""#));
+```
+
+`Heading::text` always holds the original heading text for display. The ids match GitHub's: a heading made only of punctuation or emoji has no letters left, so its id is empty (then `-1`, `-2`, … for repeats). Give such headings a word if they need a stable anchor.
 
 ### Streaming into a writer
 

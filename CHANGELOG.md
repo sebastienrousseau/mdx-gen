@@ -11,6 +11,19 @@ Pre-1.0 caveat: cargo treats every `0.x` bump as fully incompatible. Read the
 
 ### Added
 
+- **Heading ids for non-Latin scripts, audited** (#34). Tests now pin
+  `Heading::{level, text, id}` and the rendered `id="…"` for headings
+  in Latin (with diacritics), Cyrillic, Greek, Arabic, Japanese
+  (hiragana and kanji), Chinese, Korean and Thai, plus prefixes,
+  de-duplication of repeated CJK headings and mixed-script headings.
+  **Decision: keep comrak's anchorizer** rather than add a pluggable
+  slugifier. The audit showed it is already Unicode-aware (it keeps
+  letters, marks and digits in every script and matches GitHub's
+  anchors), so none of the feared empty or colliding ids appear for
+  real text. The one gap, shared with GitHub, is a heading with no
+  letters at all (emoji or punctuation only), whose id is empty; the
+  README's new "Heading IDs for non-Latin content" section documents
+  it.
 - **Lazy-loading images** (#32): `MarkdownOptions::with_lazy_images(true)`
   (field `enable_lazy_images`, default `false`) adds
   `loading="lazy"` and `decoding="async"` to every image rendered
