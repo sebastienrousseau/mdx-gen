@@ -83,6 +83,19 @@ pub struct MarkdownOptions<'a> {
     /// blocks continue to see syntax-highlighted source. Opt in via
     /// [`MarkdownOptions::with_diagrams`].
     pub enable_diagrams: bool,
+    /// Highlight the code blocks of large documents on several
+    /// threads before rendering (on by default).
+    ///
+    /// Only documents with at least
+    /// `8 x worker threads` distinct code blocks are split, using up
+    /// to `min(available cores, 8)` scoped threads that end before
+    /// the call returns; smaller documents are highlighted on the
+    /// calling thread. The output is identical either way. Turn it
+    /// off when the caller already renders many documents in
+    /// parallel and does not want extra threads. Has no effect when
+    /// syntax highlighting is off or the `syntax_highlighting`
+    /// feature is disabled.
+    pub parallel_highlighting: bool,
 }
 
 impl<'a> Default for MarkdownOptions<'a> {
@@ -108,6 +121,7 @@ impl<'a> Default for MarkdownOptions<'a> {
             header_ids: None,
             sanitizer_config: None,
             enable_diagrams: false,
+            parallel_highlighting: true,
         }
     }
 }
@@ -207,6 +221,13 @@ impl<'a> MarkdownOptions<'a> {
     /// contract.
     pub fn with_diagrams(mut self, enable: bool) -> Self {
         self.enable_diagrams = enable;
+        self
+    }
+
+    /// Enables or disables multi-threaded highlighting of large
+    /// documents. See [`MarkdownOptions::parallel_highlighting`].
+    pub fn with_parallel_highlighting(mut self, enable: bool) -> Self {
+        self.parallel_highlighting = enable;
         self
     }
 
@@ -552,6 +573,7 @@ impl fmt::Debug for MarkdownOptions<'_> {
             .field("header_ids", &self.header_ids)
             .field("sanitizer_config", &self.sanitizer_config)
             .field("enable_diagrams", &self.enable_diagrams)
+            .field("parallel_highlighting", &self.parallel_highlighting)
             .finish()
     }
 }
@@ -839,7 +861,13 @@ fn pipeline<W: Write>(
     let adapter;
     #[cfg(feature = "syntax_highlighting")]
     let plugins = if options.enable_syntax_highlighting {
-        adapter = SyntectAdapter::new(options.syntax_theme.as_deref());
+        let prepared = if options.parallel_highlighting {
+            crate::highlight::prehighlight(root)
+        } else {
+            crate::highlight::Prepared::new()
+        };
+        adapter = SyntectAdapter::new(options.syntax_theme.as_deref())
+            .with_prepared(prepared);
         Plugins {
             render: RenderPlugins {
                 codefence_syntax_highlighter: Some(&adapter),
